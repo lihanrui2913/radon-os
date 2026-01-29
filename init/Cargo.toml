@@ -1,0 +1,11 @@
+[package]
+name = "init"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bitflags = "2.10.0"
+bootstrap = { path = "../bootstrap", features = ["handler"] }
+libradon = { path = "../libradon" }
+radon_kernel = { path = "../kernel" }
+spin = "0.10.0"

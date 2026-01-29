@@ -1,0 +1,22 @@
+[package]
+name = "nameserver"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitflags = "2.10.0"
+bootstrap = { path = "../bootstrap" }
+libradon = { path = "../libradon" }
+radon_kernel = { path = "../kernel" }
+spin = "0.10.0"
+
+[features]
+client = ["bootstrap/client"]
+server = []
+
+[[bin]]
+name = "nameserver"
+required-features = ["server", "bootstrap/client"]
+
+[lib]
+name = "nameserver"

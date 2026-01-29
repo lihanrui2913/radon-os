@@ -1,0 +1,17 @@
+# libdriver/Cargo.toml
+
+[package]
+name = "libdriver"
+version = "0.1.0"
+edition = "2021"
+description = "User-space driver framework for microkernel"
+
+[dependencies]
+bitflags = "2.10.0"
+libradon = { path = "../libradon" }
+nameserver = { path = "../nameserver", features = ["client"] }
+radon_kernel = { path = "../kernel" }
+spin = "0.10.0"
+
+[features]
+async = []
