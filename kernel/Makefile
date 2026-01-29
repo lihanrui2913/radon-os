@@ -13,7 +13,7 @@ MANIFEST := $(SOURCE)/Cargo.toml
 
 export BUILD = $(SOURCE)/build
 
-QEMUFLAGS ?= -m 2G -serial stdio
+QEMUFLAGS ?= -m 4G -serial stdio
 ifneq ($(DEBUG), 0)
 QEMUFLAGS += -s -S
 endif

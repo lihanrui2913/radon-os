@@ -68,6 +68,7 @@ pub static TERMINAL: Lazy<Mutex<Terminal<Display>>> = Lazy::new(|| {
 
 pub static TERMINAL_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
+#[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     if TERMINAL_INITIALIZED.load(core::sync::atomic::Ordering::SeqCst) {
         TERMINAL.lock().write_fmt(args).unwrap();

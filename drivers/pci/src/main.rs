@@ -279,7 +279,7 @@ fn pci_main() -> radon_kernel::Result<()> {
         let segment_group = entry.segment_group;
 
         (entry.bus_start..=entry.bus_end)
-            .for_each(|bus| pci_scan_bus(segment_group, 0, &pci_access));
+            .for_each(|bus| pci_scan_bus(segment_group, bus, &pci_access));
     }
 
     info!("PCI devices loaded");

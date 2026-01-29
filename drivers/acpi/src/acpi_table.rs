@@ -7,7 +7,7 @@ use libradon::{
 };
 use radon_kernel::{EINVAL, Error, Result};
 
-pub const VA_BASE: usize = 0x4000_0000;
+pub const VA_BASE: usize = 0x0000_6000_0000_0000;
 
 fn phys_to_virt(phys: usize) -> usize {
     phys + VA_BASE

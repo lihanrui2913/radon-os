@@ -1,35 +1,73 @@
+use core::fmt::{self, Write};
+
 use log::{Level, Record, set_logger, set_max_level};
 use log::{LevelFilter, Log, Metadata};
 use radon_kernel::nr::SYS_LOG;
-use radon_kernel::syscall::log::{
-    LOG_LEVEL_DEBUG, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_WARN,
-};
+use spin::Mutex;
 
 pub fn init() {
     set_logger(&Logger).unwrap();
     set_max_level(LevelFilter::Trace);
 }
 
+pub struct KernelWriter;
+
+impl Write for KernelWriter {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        unsafe { crate::syscall::syscall2(SYS_LOG, s.as_ptr() as usize, s.len()) };
+        Ok(())
+    }
+}
+
+pub static LOCKED_KERNEL_WRITER: Mutex<KernelWriter> = Mutex::new(KernelWriter);
+
+#[doc(hidden)]
+pub fn _print(args: fmt::Arguments) {
+    LOCKED_KERNEL_WRITER.lock().write_fmt(args).unwrap();
+}
+
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => (
+        $crate::logger::_print(format_args!($($arg)*))
+    )
+}
+
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)))
+}
+
+macro_rules! log_output {
+    ($color:expr, $level:expr, $args:expr, $($extra:tt)*) => {
+        crate::println!(
+            "[{}] {}{}",
+            format_args!("\x1b[{}m{}\x1b[0m", $color, $level),
+            $args,
+            format_args!($($extra)*)
+        );
+    };
+}
+
 struct Logger;
 
 impl Logger {
-    fn log_message(&self, record: &Record) {
-        if let Some(content) = record.args().as_str() {
-            let log_level = match record.level() {
-                Level::Error => LOG_LEVEL_ERROR,
-                Level::Warn => LOG_LEVEL_WARN,
-                Level::Info => LOG_LEVEL_INFO,
-                Level::Debug => LOG_LEVEL_DEBUG,
-                Level::Trace => LOG_LEVEL_INFO,
-            };
-            unsafe {
-                crate::syscall::syscall3(
-                    SYS_LOG,
-                    log_level,
-                    content.as_ptr() as usize,
-                    content.len(),
-                )
-            };
+    fn log_message(&self, record: &Record, with_location: bool) {
+        let color = match record.level() {
+            Level::Error => "31",
+            Level::Warn => "33",
+            Level::Info => "32",
+            Level::Debug => "34",
+            Level::Trace => "35",
+        };
+
+        if with_location {
+            let file = record.file().unwrap();
+            let line = record.line().unwrap();
+            log_output!(color, record.level(), record.args(), ", {}:{}", file, line);
+        } else {
+            log_output!(color, record.level(), record.args(), "");
         }
     }
 }
@@ -41,7 +79,8 @@ impl Log for Logger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            self.log_message(record);
+            let with_location = matches!(record.level(), Level::Debug);
+            self.log_message(record, with_location);
         }
     }
 

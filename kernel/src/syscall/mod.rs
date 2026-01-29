@@ -40,7 +40,7 @@ pub extern "C" fn syscall_handler(regs: *mut Ptrace) {
     // );
 
     let ret = match idx {
-        SYS_LOG => log::sys_log(arg1, arg2, arg3),
+        SYS_LOG => log::sys_log(arg1, arg2),
 
         SYS_HANDLE_CLOSE => object::sys_handle_close(arg1),
         SYS_HANDLE_DUPLICATE => object::sys_handle_duplicate(arg1, arg2),
