@@ -81,9 +81,9 @@ impl BootstrapClient {
         match response.status() {
             ResponseStatus::Ok => {
                 if result.handle_count > 0 && handles[0].is_valid() {
-                    Ok(Channel::from_handle(OwnedHandle::from_raw(
-                        handles[0].raw(),
-                    )))
+                    let mut handle = OwnedHandle::from_raw(handles[0].raw());
+                    handle.with_nodrop(true);
+                    Ok(Channel::from_handle(handle))
                 } else {
                     Err(BootstrapError::InvalidResponse)
                 }

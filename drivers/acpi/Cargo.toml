@@ -1,10 +1,11 @@
 [package]
-name = "acpi"
+name = "acpid"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+acpi = { path = "../../kernel/crates/acpi", default-features = false, features = ["alloc"] }
+libdriver = { path = "../../libdriver" }
 libradon = { path = "../../libradon" }
 radon_kernel = { path = "../../kernel" }
 spin = "0.10.0"
-

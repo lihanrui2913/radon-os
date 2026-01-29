@@ -96,7 +96,10 @@ impl NameService {
 
         loop {
             // 尝试接收
-            match self.channel.try_recv(&mut recv_buf, &mut recv_handles) {
+            match self
+                .channel
+                .try_recv_with_handles(&mut recv_buf, &mut recv_handles)
+            {
                 Ok(result) if result.data_len >= MessageHeader::SIZE => {
                     let header =
                         MessageHeader::from_bytes(&recv_buf).ok_or(Error::InvalidArgument)?;
@@ -382,7 +385,10 @@ impl NameService {
                 if packet.signals.contains(Signals::READABLE) {
                     // 尝试接收通知
                     let mut handles = [Handle::INVALID; 4];
-                    if let Ok(result) = self.channel.try_recv(&mut recv_buf, &mut handles) {
+                    if let Ok(result) = self
+                        .channel
+                        .try_recv_with_handles(&mut recv_buf, &mut handles)
+                    {
                         if result.data_len >= MessageHeader::SIZE {
                             let header = MessageHeader::from_bytes(&recv_buf)
                                 .ok_or(Error::InvalidArgument)?;

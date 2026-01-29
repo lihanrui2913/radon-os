@@ -77,7 +77,7 @@ impl<'a> Future for ChannelRecvFuture<'a> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // 尝试非阻塞接收
-        match self.channel.try_recv(self.buffer, &mut []) {
+        match self.channel.try_recv(self.buffer) {
             Ok(result) => Poll::Ready(Ok(result.data_len)),
             Err(e) if e.errno == EAGAIN => {
                 // 注册到 port

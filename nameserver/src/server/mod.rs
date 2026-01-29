@@ -40,7 +40,7 @@ impl Default for Config {
 }
 
 /// 客户端连接
-struct ClientConnection {
+pub struct ClientConnection {
     id: u64,
     channel: Channel,
     key: u64,
@@ -139,7 +139,10 @@ impl NameServer {
         let mut handles = [Handle::INVALID; 4];
 
         loop {
-            match self.accept_channel.try_recv(&mut buf, &mut handles) {
+            match self
+                .accept_channel
+                .try_recv_with_handles(&mut buf, &mut handles)
+            {
                 Ok(result) if result.handle_count > 0 => {
                     let client_channel =
                         Channel::from_handle(OwnedHandle::from_raw(handles[0].raw()));
@@ -194,23 +197,29 @@ impl NameServer {
 
     /// 移除客户端
     fn remove_client(&self, client_id: u64) {
-        if let Some(client) = self.clients.lock().remove(&client_id) {
+        let mut clients_guard = self.clients.lock();
+        let (registered_services, watches) = if let Some(client) = clients_guard.remove(&client_id)
+        {
             // 解绑 port
             let _ = self.port.unbind(client.key);
 
-            // 注销该客户端注册的所有服务
-            for service_id in &client.registered_services {
-                if let Some(service) = self.registry.remove_by_id(*service_id) {
-                    // 通知监视者
-                    self.watchers
-                        .notify_offline(&service.name, *service_id, &self.clients);
-                }
-            }
+            (client.registered_services.clone(), client.watches.clone())
+        } else {
+            (Vec::new(), Vec::new())
+        };
 
-            // 移除监视
-            for watch_id in &client.watches {
-                self.watchers.remove(*watch_id);
+        // 注销该客户端注册的所有服务
+        for service_id in &registered_services {
+            if let Some(service) = self.registry.remove_by_id(*service_id) {
+                // 通知监视者
+                self.watchers
+                    .notify_offline(&service.name, *service_id, &self.clients);
             }
+        }
+
+        // 移除监视
+        for watch_id in &watches {
+            self.watchers.remove(*watch_id);
         }
     }
 
@@ -242,7 +251,7 @@ impl NameServer {
         let mut handles = [Handle::INVALID; 16];
 
         loop {
-            match client.channel.try_recv(&mut buf, &mut handles) {
+            match client.channel.try_recv_with_handles(&mut buf, &mut handles) {
                 Ok(result) if result.data_len >= MessageHeader::SIZE => {
                     let header = match MessageHeader::from_bytes(&buf) {
                         Some(h) => h,

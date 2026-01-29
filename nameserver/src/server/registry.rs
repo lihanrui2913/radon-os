@@ -5,6 +5,7 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
+use libradon::syscall::clock_get;
 use spin::RwLock;
 
 use libradon::channel::Channel;
@@ -94,7 +95,7 @@ impl ServiceRegistry {
             name: name.clone(),
             description,
             flags,
-            registered_at: 0, // TODO: 获取当前时间
+            registered_at: clock_get().unwrap(),
             owner_id,
             channel,
             connection_count: AtomicU64::new(0),

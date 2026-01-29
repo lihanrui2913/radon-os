@@ -11,6 +11,7 @@ radon_kernel = { path = "../kernel" }
 spin = "0.10.0"
 
 [features]
+default = ["client", "server"]
 client = ["bootstrap/client"]
 server = []
 

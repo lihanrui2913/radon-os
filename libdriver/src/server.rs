@@ -5,6 +5,7 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use alloc::{boxed::Box, format};
+use libradon::info;
 use radon_kernel::Error;
 use spin::Mutex;
 
@@ -89,7 +90,9 @@ impl DriverServer {
 
         // 注册到命名服务
         nameserver::client::register(&format!("driver.{}", name), &accept_client)
-            .map_err(|e| Error::from(e));
+            .map_err(|e| Error::from(e))?;
+
+        info!("Driver {} registered.", name);
 
         Ok(Self {
             name: name.into(),
@@ -145,7 +148,10 @@ impl DriverServer {
         let mut handles = [Handle::INVALID; 4];
 
         loop {
-            match self.accept_channel.try_recv(&mut buf, &mut handles) {
+            match self
+                .accept_channel
+                .try_recv_with_handles(&mut buf, &mut handles)
+            {
                 Ok(result) if result.handle_count > 0 => {
                     let client_channel = Channel::from_handle(
                         libradon::handle::OwnedHandle::from_raw(handles[0].raw()),
@@ -245,7 +251,7 @@ impl DriverServer {
         let mut handles = [Handle::INVALID; 16];
 
         loop {
-            match client.channel.try_recv(&mut buf, &mut handles) {
+            match client.channel.try_recv_with_handles(&mut buf, &mut handles) {
                 Ok(result) if result.data_len >= MessageHeader::SIZE => {
                     // 解析请求
                     let header = MessageHeader::from_bytes(&buf[..MessageHeader::SIZE])

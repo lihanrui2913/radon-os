@@ -49,6 +49,11 @@ impl Channel {
         Self { handle }
     }
 
+    #[inline]
+    pub fn with_nodrop(&mut self, nodrop: bool) {
+        self.handle.with_nodrop(nodrop);
+    }
+
     /// 获取句柄
     #[inline]
     pub fn handle(&self) -> Handle {
@@ -109,10 +114,36 @@ impl Channel {
         })
     }
 
-    /// 非阻塞接收
-    pub fn try_recv(&self, data: &mut [u8], handles: &mut [Handle]) -> Result<RecvResult> {
-        // TODO: 添加非阻塞标志
-        self.recv_with_handles(data, handles)
+    /// 接收数据到缓冲区
+    pub fn try_recv(&self, data: &mut [u8]) -> Result<RecvResult> {
+        self.try_recv_with_handles(data, &mut [])
+    }
+
+    /// 接收数据和句柄
+    pub fn try_recv_with_handles(
+        &self,
+        data: &mut [u8],
+        handles: &mut [Handle],
+    ) -> Result<RecvResult> {
+        let mut actual: [usize; 2] = [0; 2];
+
+        let ret = unsafe {
+            syscall::syscall6(
+                nr::SYS_CHANNEL_TRY_RECV,
+                self.handle.raw() as usize,
+                data.as_mut_ptr() as usize,
+                data.len(),
+                handles.as_mut_ptr() as usize,
+                handles.len(),
+                actual.as_mut_ptr() as usize,
+            )
+        };
+        result_from_retval(ret)?;
+
+        Ok(RecvResult {
+            data_len: actual[0],
+            handle_count: actual[1],
+        })
     }
 }
 

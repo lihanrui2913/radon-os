@@ -103,6 +103,7 @@ bitflags! {
 /// 带自动关闭的句柄
 pub struct OwnedHandle {
     handle: Handle,
+    nodrop: bool,
 }
 
 impl OwnedHandle {
@@ -111,6 +112,7 @@ impl OwnedHandle {
     pub const fn from_raw(raw: u32) -> Self {
         Self {
             handle: Handle(raw),
+            nodrop: false,
         }
     }
 
@@ -134,17 +136,28 @@ impl OwnedHandle {
         raw
     }
 
+    #[inline]
+    pub fn with_nodrop(&mut self, nodrop: bool) {
+        self.nodrop = nodrop;
+    }
+
+    /// 关闭句柄
+    pub fn close(self) -> Result<()> {
+        self.handle.close()
+    }
+
     /// 复制句柄
     pub fn duplicate(&self, rights: Rights) -> Result<OwnedHandle> {
-        self.handle
-            .duplicate(rights)
-            .map(|h| OwnedHandle { handle: h })
+        self.handle.duplicate(rights).map(|h| OwnedHandle {
+            handle: h,
+            nodrop: false,
+        })
     }
 }
 
 impl Drop for OwnedHandle {
     fn drop(&mut self) {
-        if self.handle.is_valid() {
+        if self.handle.is_valid() && !self.nodrop {
             let _ = self.handle.close();
         }
     }

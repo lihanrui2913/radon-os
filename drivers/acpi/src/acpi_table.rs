@@ -1,47 +1,48 @@
 use core::ptr::NonNull;
 
-use crate::{
-    arch::{CurrentRmmArch, CurrentTimeArch, time::TimeArch},
-    init::memory::{FRAME_ALLOCATOR, PAGE_SIZE, align_down, align_up},
-};
 use acpi::AcpiTables;
-use limine::request::RsdpRequest;
-use rmm::{Arch, PageFlags, PageMapper, PhysicalAddress};
-use spin::{Lazy, Mutex};
+use libradon::{
+    memory::{MappingFlags, Vmo, map_vmo_at},
+    syscall::clock_get,
+};
+use radon_kernel::{EINVAL, Error, Result};
+
+pub const VA_BASE: usize = 0x4000_0000;
+
+fn phys_to_virt(phys: usize) -> usize {
+    phys + VA_BASE
+}
 
 #[derive(Clone)]
 pub struct AcpiHandler;
 
 #[allow(unused)]
-impl acpi::Handler for AcpiHandler {
+impl ::acpi::Handler for AcpiHandler {
     unsafe fn map_physical_region<T>(
         &self,
         pa: usize,
         size: usize,
     ) -> acpi::PhysicalMapping<Self, T> {
-        let physical_address = align_down(pa);
-        let offset = pa - physical_address;
-        let physical_address = PhysicalAddress::new(physical_address);
-        let virtual_address = CurrentRmmArch::phys_to_virt(physical_address);
-        let size = align_up(size);
+        let aligned_pa = pa & !4095usize;
+        let aligned_size = (size + 4095) & !4095usize;
+        let offset = pa - aligned_pa;
 
-        let mut frame_allocator = FRAME_ALLOCATOR.lock();
-        let mut mapper =
-            PageMapper::<CurrentRmmArch, _>::current(rmm::TableKind::Kernel, &mut *frame_allocator);
+        let va = phys_to_virt(pa);
+        let aligned_va = va & !4095usize;
 
-        for i in (0..size).step_by(PAGE_SIZE) {
-            if let Some(flusher) = mapper.map_phys(
-                virtual_address.add(i),
-                physical_address.add(i),
-                PageFlags::new().write(true),
-            ) {
-                flusher.flush();
-            }
-        }
+        let vmo = Vmo::create_physical(aligned_pa, aligned_size)
+            .expect("No enougth memory to create VMO");
+        let _ = map_vmo_at(
+            &vmo,
+            0,
+            aligned_size,
+            MappingFlags::READ | MappingFlags::WRITE,
+            aligned_va as *mut u8,
+        );
 
         acpi::PhysicalMapping {
-            physical_start: physical_address.add(offset).data(),
-            virtual_start: NonNull::new_unchecked(virtual_address.add(offset).data() as *mut T),
+            physical_start: pa,
+            virtual_start: NonNull::new_unchecked(va as *mut T),
             region_length: size,
             mapped_length: size,
             handler: self.clone(),
@@ -124,29 +125,23 @@ impl acpi::Handler for AcpiHandler {
     fn write_pci_u32(&self, address: acpi::PciAddress, offset: u16, value: u32) {}
 
     fn nanos_since_boot(&self) -> u64 {
-        CurrentTimeArch::nano_time()
+        clock_get().unwrap() as u64
     }
 
-    fn stall(&self, microseconds: u64) {
-        let nanoseconds = microseconds * 1000000;
-        CurrentTimeArch::delay(nanoseconds);
-    }
+    fn stall(&self, microseconds: u64) {}
 
-    fn sleep(&self, milliseconds: u64) {
-        let nanoseconds = milliseconds * 1000;
-        CurrentTimeArch::delay(nanoseconds);
-    }
+    fn sleep(&self, milliseconds: u64) {}
 }
 
-#[used]
-#[unsafe(link_section = ".requests")]
-pub static RSDP_REQUEST: RsdpRequest = RsdpRequest::new();
+pub struct Acpi {
+    pub table: AcpiTables<AcpiHandler>,
+}
 
-pub static ACPI_TABLES: Lazy<Mutex<Option<AcpiTables<AcpiHandler>>>> = Lazy::new(|| {
-    let result = if let Some(rsdp_response) = RSDP_REQUEST.get_response() {
-        unsafe { AcpiTables::from_rsdp(AcpiHandler, rsdp_response.address()) }.ok()
-    } else {
-        None
-    };
-    Mutex::new(result)
-});
+impl Acpi {
+    pub fn new(rsdp: usize) -> Result<Self> {
+        Ok(Self {
+            table: unsafe { AcpiTables::from_rsdp(AcpiHandler, rsdp) }
+                .map_err(|_| Error::new(EINVAL))?,
+        })
+    }
+}

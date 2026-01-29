@@ -242,7 +242,9 @@ pub fn get_bootstrap_channel() -> Result<Channel> {
     if handle == 0 {
         Err(Error::new(EINVAL))
     } else {
-        Ok(Channel::from_handle(OwnedHandle::from_raw(handle)))
+        let mut handle = OwnedHandle::from_raw(handle);
+        handle.with_nodrop(true);
+        Ok(Channel::from_handle(handle))
     }
 }
 

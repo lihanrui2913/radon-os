@@ -1,12 +1,10 @@
-//! Name Server 可执行文件
-
 #![no_std]
 #![no_main]
 
 extern crate alloc;
 
 use bootstrap::{protocol::services, BootstrapClient};
-use libradon::{channel::Channel, error, info};
+use libradon::{error, info};
 use nameserver::server::{Config, NameServer};
 
 #[no_mangle]

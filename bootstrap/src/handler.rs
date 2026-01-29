@@ -185,7 +185,7 @@ impl BootstrapHandler {
         let mut handles = [Handle::INVALID; 4];
 
         // 尝试接收请求
-        let result = match child.channel.try_recv(&mut buf, &mut handles) {
+        let result = match child.channel.try_recv_with_handles(&mut buf, &mut handles) {
             Ok(r) => r,
             Err(_) => return,
         };

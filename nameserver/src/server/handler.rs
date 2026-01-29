@@ -5,9 +5,9 @@ use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
+use libradon::handle::OwnedHandle;
 use spin::Mutex;
 
-use libradon::handle::OwnedHandle;
 use libradon::{channel::Channel, handle::Handle};
 
 use crate::protocol::*;
@@ -148,10 +148,12 @@ impl RequestHandler {
             .register(name.clone(), description, flags, client_id, channel)
         {
             Ok(service) => {
+                let mut clients_guard = clients.lock();
                 // 记录到客户端
-                if let Some(client) = clients.lock().get_mut(&client_id) {
+                if let Some(client) = clients_guard.get_mut(&client_id) {
                     client.registered_services.push(service.id);
                 }
+                drop(clients_guard);
 
                 // 通知监视者
                 self.watchers.notify_online(&name, service.id, clients);
@@ -294,8 +296,13 @@ impl RequestHandler {
                 };
 
                 // 将 server_end 发送给服务
-                // TODO: 这需要更复杂的机制
-                // 暂时直接返回服务的 channel 句柄（这不安全，仅用于演示）
+                match service
+                    .channel
+                    .send_with_handles(&[0], &[server_end.handle()])
+                {
+                    Ok(_) => {}
+                    Err(_) => return Response::error(sequence, Status::InternalError),
+                };
 
                 service
                     .connection_count

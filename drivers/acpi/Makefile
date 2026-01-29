@@ -16,7 +16,7 @@ export BUILD = $(SOURCE)/build
 $(BUILD)/acpi-$(ARCH).elf:
 	mkdir -p $(BUILD)
 	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET) -Z build-std=core,alloc -Zbuild-std-features=compiler-builtins-mem
-	cp target/$(RUST_TARGET)/$(RUST_PROFILE_SUBDIR)/acpi $(BUILD)/acpi-$(ARCH).elf
+	cp target/$(RUST_TARGET)/$(RUST_PROFILE_SUBDIR)/acpid $(BUILD)/acpi-$(ARCH).elf
 	cp $(BUILD)/acpi-$(ARCH).elf $(BUILD)/acpi.elf
 
 clippy:

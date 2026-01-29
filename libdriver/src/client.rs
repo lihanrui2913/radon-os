@@ -136,7 +136,10 @@ impl DriverClient {
 
         loop {
             // 先尝试接收
-            match self.channel.try_recv(&mut recv_buf, &mut recv_handles) {
+            match self
+                .channel
+                .try_recv_with_handles(&mut recv_buf, &mut recv_handles)
+            {
                 Ok(result) if result.data_len >= MessageHeader::SIZE => {
                     let header = MessageHeader::from_bytes(&recv_buf[..MessageHeader::SIZE])
                         .ok_or(DriverError::InvalidArgument)?;

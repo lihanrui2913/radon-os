@@ -3,7 +3,9 @@ use crate::{
     syscall::error::{ENOSYS, Error},
 };
 
+pub mod clock;
 pub mod error;
+pub mod kernel;
 pub mod log;
 pub mod memory;
 pub mod nr;
@@ -54,6 +56,8 @@ pub extern "C" fn syscall_handler(regs: *mut Ptrace) {
         SYS_CHANNEL_RECV => object::sys_channel_recv(arg1, arg2, arg3, arg4, arg5, arg6),
         SYS_CHANNEL_TRY_RECV => object::sys_channel_try_recv(arg1, arg2, arg3, arg4, arg5, arg6),
 
+        SYS_CLOCK_GET => clock::sys_clock_get(),
+
         SYS_PROCESS_CREATE => process::sys_process_create(arg1, arg2),
         SYS_PROCESS_START => process::sys_process_start(arg1),
         SYS_THREAD_CREATE => process::sys_thread_create(arg1, arg2),
@@ -79,6 +83,8 @@ pub extern "C" fn syscall_handler(regs: *mut Ptrace) {
             crate::task::schedule();
             Ok(0)
         }
+
+        SYS_KRES_GET_RSDP => kernel::get_rsdp(),
 
         _ => {
             warn!("Syscall {} not implemented", idx);
