@@ -1,6 +1,8 @@
 pub const ACPI_DAEMON_STATUS_OK: i32 = 0;
 pub const ACPI_DAEMON_STATUS_NOT_FOUND: i32 = 1;
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct AcpiMcfg {
     pub base_address: u64,
     pub segment_group: u16,

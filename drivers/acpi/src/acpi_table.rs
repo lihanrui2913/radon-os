@@ -40,7 +40,7 @@ impl ::acpi::Handler for AcpiHandler {
             aligned_va as *mut u8,
         );
 
-        acpi::PhysicalMapping {
+        ::acpi::PhysicalMapping {
             physical_start: pa,
             virtual_start: NonNull::new_unchecked(va as *mut T),
             region_length: size,
@@ -49,7 +49,7 @@ impl ::acpi::Handler for AcpiHandler {
         }
     }
 
-    fn unmap_physical_region<T>(region: &acpi::PhysicalMapping<Self, T>) {}
+    fn unmap_physical_region<T>(region: &::acpi::PhysicalMapping<Self, T>) {}
 
     fn read_u8(&self, address: usize) -> u8 {
         unsafe { core::ptr::read_volatile(address as *const u8) }
@@ -106,23 +106,23 @@ impl ::acpi::Handler for AcpiHandler {
 
     fn write_io_u32(&self, port: u16, value: u32) {}
 
-    fn read_pci_u8(&self, address: acpi::PciAddress, offset: u16) -> u8 {
+    fn read_pci_u8(&self, address: ::acpi::PciAddress, offset: u16) -> u8 {
         0
     }
 
-    fn read_pci_u16(&self, address: acpi::PciAddress, offset: u16) -> u16 {
+    fn read_pci_u16(&self, address: ::acpi::PciAddress, offset: u16) -> u16 {
         0
     }
 
-    fn read_pci_u32(&self, address: acpi::PciAddress, offset: u16) -> u32 {
+    fn read_pci_u32(&self, address: ::acpi::PciAddress, offset: u16) -> u32 {
         0
     }
 
-    fn write_pci_u8(&self, address: acpi::PciAddress, offset: u16, value: u8) {}
+    fn write_pci_u8(&self, address: ::acpi::PciAddress, offset: u16, value: u8) {}
 
-    fn write_pci_u16(&self, address: acpi::PciAddress, offset: u16, value: u16) {}
+    fn write_pci_u16(&self, address: ::acpi::PciAddress, offset: u16, value: u16) {}
 
-    fn write_pci_u32(&self, address: acpi::PciAddress, offset: u16, value: u32) {}
+    fn write_pci_u32(&self, address: ::acpi::PciAddress, offset: u16, value: u32) {}
 
     fn nanos_since_boot(&self) -> u64 {
         clock_get().unwrap() as u64

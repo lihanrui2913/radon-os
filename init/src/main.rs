@@ -88,17 +88,20 @@ fn start_nameserver(bootstrap: &BootstrapHandler) -> Result<(), InitError> {
     // 启动 Name Server
     ns_process.start().map_err(|_| InitError::ProcessFailed)?;
 
-    // 等待 Name Server 注册自己
-    // Name Server 启动后会通过 bootstrap channel 注册
+    while !bootstrap.ping_service(bootstrap::services::NAMESERVER) {
+        bootstrap.poll().map_err(|_| InitError::BootstrapFailed)?;
+    }
 
     Ok(())
 }
 
 static ACPI_ELF: &'static [u8] = include_bytes!("../../drivers/acpi/build/acpi.elf");
+static PCI_ELF: &'static [u8] = include_bytes!("../../drivers/pci/build/pci.elf");
 
 /// 启动核心服务
 fn start_core_services(bootstrap: &BootstrapHandler) -> Result<(), InitError> {
     start_service(bootstrap, "acpi", ACPI_ELF, false)?;
+    start_service(bootstrap, "pci", PCI_ELF, false)?;
     Ok(())
 }
 

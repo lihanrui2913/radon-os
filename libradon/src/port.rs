@@ -114,7 +114,7 @@ impl Deadline {
         match self {
             Deadline::Immediate => 0,
             Deadline::Infinite => u64::MAX,
-            Deadline::Absolute(t) => *t,
+            Deadline::Absolute(t) => crate::syscall::clock_get().unwrap() + *t,
             Deadline::Relative(t) => {
                 // TODO: 获取当前时间并计算
                 *t

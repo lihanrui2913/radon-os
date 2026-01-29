@@ -1,11 +1,9 @@
 //! 驱动客户端框架
 
-use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 use radon_kernel::Error;
-use spin::Mutex;
 
 use libradon::port::{BindOptions, Deadline};
 
@@ -24,37 +22,30 @@ pub struct DriverClient {
     channel: Channel,
     port: Port,
     next_request_id: AtomicU32,
-    pending: Mutex<BTreeMap<u32, PendingRequest>>,
-}
-
-struct PendingRequest {
-    // 可用于异步等待
 }
 
 impl DriverClient {
     /// 连接到驱动服务
     pub fn connect(service_name: &str) -> Result<Self> {
-        let service_channel = nameserver::client::connect(&format!("driver.{}", service_name))
-            .map_err(|e| Error::from(e))?;
+        let name = format!("driver.{}", service_name);
+        while nameserver::client::lookup(&name).is_err() {
+            libradon::process::yield_now();
+        }
 
-        // 创建与服务器的连接 Channel
-        let (client_end, server_end) = Channel::create_pair()?;
+        let service_channel = nameserver::client::connect(&name).map_err(|e| Error::from(e))?;
 
         let port = Port::create()?;
         port.bind(
             1,
-            &client_end,
+            &service_channel,
             Signals::READABLE | Signals::PEER_CLOSED,
             BindOptions::Persistent,
         )?;
 
-        service_channel.send_with_handles(&[0], &[server_end.handle()])?;
-
         Ok(Self {
-            channel: client_end,
+            channel: service_channel,
             port,
             next_request_id: AtomicU32::new(1),
-            pending: Mutex::new(BTreeMap::new()),
         })
     }
 
@@ -72,7 +63,6 @@ impl DriverClient {
             channel,
             port,
             next_request_id: AtomicU32::new(1),
-            pending: Mutex::new(BTreeMap::new()),
         })
     }
 

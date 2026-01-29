@@ -1,11 +1,13 @@
 use log::{Level, Record, set_logger, set_max_level};
 use log::{LevelFilter, Log, Metadata};
 use radon_kernel::nr::SYS_LOG;
-use radon_kernel::syscall::log::{LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_WARN};
+use radon_kernel::syscall::log::{
+    LOG_LEVEL_DEBUG, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_WARN,
+};
 
 pub fn init() {
     set_logger(&Logger).unwrap();
-    set_max_level(LevelFilter::Debug);
+    set_max_level(LevelFilter::Trace);
 }
 
 struct Logger;
@@ -17,7 +19,7 @@ impl Logger {
                 Level::Error => LOG_LEVEL_ERROR,
                 Level::Warn => LOG_LEVEL_WARN,
                 Level::Info => LOG_LEVEL_INFO,
-                Level::Debug => LOG_LEVEL_ERROR,
+                Level::Debug => LOG_LEVEL_DEBUG,
                 Level::Trace => LOG_LEVEL_INFO,
             };
             unsafe {

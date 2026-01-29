@@ -10,11 +10,11 @@ use acpi::sdt::mcfg::Mcfg;
 use acpid::protocol::{self, AcpiMcfg};
 use alloc::{string::String, vec::Vec};
 use libdriver::{
-    server::{ConnectionContext, RequestContext, RequestHandler},
     Request, Response, ServiceBuilder,
+    server::{ConnectionContext, RequestContext, RequestHandler},
 };
 use libradon::{error, syscall::result_from_retval};
-use radon_kernel::{Error, EINVAL};
+use radon_kernel::{EINVAL, Error};
 
 use crate::acpi_table::Acpi;
 

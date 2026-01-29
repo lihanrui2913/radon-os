@@ -1,0 +1,13 @@
+[package]
+name = "pcid"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+acpid = { path = "../acpi" }
+libdriver = { path = "../../libdriver" }
+libradon = { path = "../../libradon" }
+nameserver = { path = "../../nameserver", features = ["client"] }
+pci_types = "0.10.0"
+radon_kernel = { path = "../../kernel" }
+spin = "0.10.0"

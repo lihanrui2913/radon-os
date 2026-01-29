@@ -5,7 +5,6 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use alloc::{boxed::Box, format};
-use libradon::info;
 use radon_kernel::Error;
 use spin::Mutex;
 
@@ -77,7 +76,7 @@ pub struct DriverServer {
 impl DriverServer {
     /// 创建新的驱动服务器
     pub fn new(name: &str, handler: Arc<dyn RequestHandler>) -> Result<Self> {
-        let (accept_server, accept_client) = Channel::create_pair()?;
+        let (accept_server, connect_channel) = Channel::create_pair()?;
         let port = Port::create()?;
 
         // 绑定接受 channel 到 port
@@ -89,10 +88,8 @@ impl DriverServer {
         )?;
 
         // 注册到命名服务
-        nameserver::client::register(&format!("driver.{}", name), &accept_client)
+        nameserver::client::register(&format!("driver.{}", name), &connect_channel)
             .map_err(|e| Error::from(e))?;
-
-        info!("Driver {} registered.", name);
 
         Ok(Self {
             name: name.into(),

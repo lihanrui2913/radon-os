@@ -290,7 +290,7 @@ impl RequestHandler {
         match self.registry.lookup(name) {
             Some(service) => {
                 // 创建与服务通信的新 Channel
-                let (client_end, server_end): (_, _) = match Channel::create_pair() {
+                let (mut client_end, server_end) = match Channel::create_pair() {
                     Ok(pair) => pair,
                     Err(_) => return Response::error(sequence, Status::InternalError),
                 };
@@ -309,7 +309,9 @@ impl RequestHandler {
                     .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
 
                 // 返回 client_end 给调用者
-                Response::success(sequence).with_handles(vec![client_end.into_raw_handle()])
+                // 此处必须设置 nodrop 否则会传输失败
+                client_end.with_nodrop(true);
+                Response::success(sequence).with_handles(vec![client_end.handle()])
             }
             None => Response::error(sequence, Status::NotFound),
         }
@@ -491,18 +493,5 @@ impl RequestHandler {
             }
             None => Response::error(sequence, Status::NotFound),
         }
-    }
-}
-
-// Channel 扩展
-trait ChannelExt {
-    fn into_raw_handle(self) -> Handle;
-}
-
-impl ChannelExt for Channel {
-    fn into_raw_handle(self) -> Handle {
-        // 需要在 libsys 中添加这个方法
-        // 暂时用一个占位实现
-        Handle::from_raw(0)
     }
 }

@@ -13,7 +13,7 @@ MANIFEST := $(SOURCE)/Cargo.toml
 
 export BUILD = $(SOURCE)/build
 
-QEMUFLAGS ?= -m 4G -serial stdio
+QEMUFLAGS ?= -m 2G -serial stdio
 ifneq ($(DEBUG), 0)
 QEMUFLAGS += -s -S
 endif
@@ -68,7 +68,7 @@ ifeq ($(ARCH),loongarch64)
 endif
 
 edk2-ovmf:
-	curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-20260105T013525Z/edk2-ovmf.tar.gz | gunzip | tar -xf -
+	curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-20260129T015230Z/edk2-ovmf.tar.gz | gunzip | tar -xf -
 
 run: run-$(ARCH)
 

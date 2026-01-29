@@ -79,6 +79,11 @@ impl BootstrapHandler {
         );
     }
 
+    /// 检测服务是否存在
+    pub fn ping_service(&self, name: &str) -> bool {
+        self.services.read().contains_key(name)
+    }
+
     /// 添加子进程
     ///
     /// 当创建子进程时调用，注册其 bootstrap channel。
