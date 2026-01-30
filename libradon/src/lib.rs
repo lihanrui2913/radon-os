@@ -42,6 +42,7 @@ fn init_logger() -> Result<()> {
 pub fn init() -> Result<()> {
     init_heap()?;
     init_logger()?;
+    async_rt::init()?;
     Ok(())
 }
 

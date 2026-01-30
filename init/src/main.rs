@@ -97,11 +97,13 @@ fn start_nameserver(bootstrap: &BootstrapHandler) -> Result<(), InitError> {
 
 static ACPI_ELF: &'static [u8] = include_bytes!("../../drivers/acpi/build/acpi.elf");
 static PCI_ELF: &'static [u8] = include_bytes!("../../drivers/pci/build/pci.elf");
+static NVME_ELF: &'static [u8] = include_bytes!("../../drivers/nvme/build/nvme.elf");
 
 /// 启动核心服务
 fn start_core_services(bootstrap: &BootstrapHandler) -> Result<(), InitError> {
     start_service(bootstrap, "acpi", ACPI_ELF, false)?;
     start_service(bootstrap, "pci", PCI_ELF, false)?;
+    start_service(bootstrap, "nvme", NVME_ELF, false)?;
     Ok(())
 }
 

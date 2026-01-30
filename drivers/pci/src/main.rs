@@ -9,7 +9,7 @@ use core::fmt::Display;
 use acpid::protocol::AcpiMcfg;
 use alloc::{string::String, vec::Vec};
 use libdriver::{
-    DriverClient, Request, Response, ServiceBuilder,
+    DriverClient, DriverOp, Request, Response, ServiceBuilder,
     server::{ConnectionContext, RequestContext, RequestHandler},
 };
 use libradon::{
@@ -20,6 +20,10 @@ use pci_types::{
     Bar, BaseClass, CommandRegister, ConfigRegionAccess, DeviceId, DeviceRevision, EndpointHeader,
     HeaderType, Interface, MAX_BARS, PciAddress, PciHeader, PciPciBridgeHeader, SubClass,
     SubsystemId, SubsystemVendorId, VendorId, device_type::DeviceType,
+};
+use pcid::protocol::{
+    BAR_TYPE_IO, BAR_TYPE_MMIO, BarInfo, PCI_STATUS_NOT_FOUND, PciDeviceInfo,
+    PciGetDeviceInfoRequest,
 };
 use radon_kernel::{EINVAL, ENOENT, Error};
 use spin::Mutex;
@@ -44,7 +48,7 @@ pub extern "C" fn _start() -> ! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PciDevice {
     pub address: PciAddress,
     pub class: BaseClass,
@@ -79,11 +83,92 @@ impl Display for PciDevice {
 
 pub static PCI_DEVICES: Mutex<Vec<PciDevice>> = Mutex::new(Vec::new());
 
+fn find_pci_device_by_class_code(class: u8, subclass: u8, interface: u8) -> Vec<PciDevice> {
+    PCI_DEVICES
+        .lock()
+        .iter()
+        .filter(|device| {
+            device.class == class && device.sub_class == subclass && device.interface == interface
+        })
+        .cloned()
+        .collect::<Vec<_>>()
+}
+
+fn find_pci_device_by_vendor_device(vendor_id: u16, device_id: u16) -> Vec<PciDevice> {
+    PCI_DEVICES
+        .lock()
+        .iter()
+        .filter(|device| device.vendor_id == vendor_id && device.device_id == device_id)
+        .cloned()
+        .collect::<Vec<_>>()
+}
+
 struct PciDriverHandler;
 
 impl RequestHandler for PciDriverHandler {
     fn handle(&self, request: &Request, _ctx: &RequestContext) -> Response {
-        Response::error(request.header.request_id, 0)
+        match DriverOp::from(request.header.op) {
+            DriverOp::Open => {
+                let get_device_request = PciGetDeviceInfoRequest::from_bytes(&request.data);
+                let mut devices = Vec::new();
+                let pci_devices_by_class_code = find_pci_device_by_class_code(
+                    get_device_request.class,
+                    get_device_request.subclass,
+                    get_device_request.interface,
+                );
+                if pci_devices_by_class_code.is_empty() {
+                    devices.extend_from_slice(&find_pci_device_by_vendor_device(
+                        get_device_request.vendor,
+                        get_device_request.device,
+                    ));
+                } else {
+                    devices.extend_from_slice(&pci_devices_by_class_code);
+                }
+                let mut result = Vec::new();
+                for device in devices {
+                    let mut device_info = PciDeviceInfo {
+                        bars: [BarInfo::default(); 6],
+                        class: device.class,
+                        subclass: device.sub_class,
+                        interface: device.interface,
+                        vendor: device.vendor_id,
+                        device: device.device_id,
+                        subsystem_vendor: device.subsystem_vendor_id,
+                        subsystem_device: device.subsystem_device_id,
+                        revision: device.revision,
+                    };
+                    for (idx, bar) in device.bars.iter().enumerate() {
+                        if let Some(bar) = bar {
+                            if let Bar::Io { port } = *bar {
+                                device_info.bars[idx] = BarInfo {
+                                    address: port as u64,
+                                    size: 0,
+                                    bar_type: BAR_TYPE_IO,
+                                };
+                            } else {
+                                let (address, size) = bar.unwrap_mem();
+                                device_info.bars[idx] = BarInfo {
+                                    address: address as u64,
+                                    size: size as u32,
+                                    bar_type: BAR_TYPE_MMIO,
+                                };
+                            }
+                        }
+                    }
+                    result.push(device_info);
+                }
+
+                let data = unsafe {
+                    core::slice::from_raw_parts(
+                        result.as_ptr() as *const u8,
+                        result.len() * size_of::<PciDeviceInfo>(),
+                    )
+                }
+                .to_vec();
+                Response::success(request.header.request_id).with_data(data)
+            }
+            _ => Response::error(request.header.request_id, PCI_STATUS_NOT_FOUND),
+        }
     }
 
     fn on_connect(&self, _ctx: &ConnectionContext) -> libdriver::Result<()> {
