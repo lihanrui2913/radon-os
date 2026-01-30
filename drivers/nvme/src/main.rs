@@ -2,17 +2,18 @@
 #![no_main]
 #![allow(unsafe_op_in_unsafe_fn)]
 
-use alloc::{format, sync::Arc};
+use alloc::{format, sync::Arc, vec::Vec};
+use block_protocol::protocol::BLOCK_ERR_IO;
 use libdriver::{
-    DriverClient, DriverOp, PhysAddr, Request, RequestHandler, Response, ServiceBuilder,
+    DriverClient, DriverOp, DriverServer, PhysAddr, Request, RequestHandler, Response,
+    ServiceBuilder,
+    protocol::IoRequest,
     server::{ConnectionContext, RequestContext},
 };
-use libradon::{
-    async_rt::{global_executor, spawn},
-    error, info,
-};
+use libradon::{error, info};
 use pcid::protocol::{PciDeviceInfo, PciGetDeviceInfoRequest};
 use radon_kernel::{EINVAL, ENOENT, EOPNOTSUPP, Error};
+use spin::Mutex;
 
 use crate::nvme::{NvmeController, NvmeNamespace};
 
@@ -44,7 +45,36 @@ struct NvmeDriverHandler(Arc<NvmeNamespace>);
 
 impl RequestHandler for NvmeDriverHandler {
     fn handle(&self, request: &Request, _ctx: &RequestContext) -> Response {
-        Response::error(request.header.request_id, 1)
+        match DriverOp::from(request.header.op) {
+            DriverOp::Read => {
+                let io_request =
+                    unsafe { (request.data.as_ptr() as *const IoRequest).as_ref() }.unwrap();
+                let mut buf = Vec::with_capacity(io_request.length as usize);
+                if let Err(_) = self.0.read_to_slice(io_request.offset, &mut buf) {
+                    Response::error(request.header.request_id, BLOCK_ERR_IO)
+                } else {
+                    Response::success(request.header.request_id).with_data(buf)
+                }
+            }
+            DriverOp::Write => {
+                let io_request =
+                    unsafe { (request.data.as_ptr() as *const IoRequest).as_ref() }.unwrap();
+                let buf = unsafe {
+                    core::slice::from_raw_parts(
+                        (request.data.as_ptr() as *const IoRequest).add(1) as *const u8,
+                        io_request.length as usize,
+                    )
+                };
+                if let Err(_) = self.0.write_from_slice(io_request.offset, buf) {
+                    Response::error(request.header.request_id, BLOCK_ERR_IO)
+                } else {
+                    Response::success(request.header.request_id)
+                        .with_data((io_request.length).to_le_bytes().to_vec())
+                }
+            }
+            // TODO: GetBuffer & ReleaseBuffer
+            _ => Response::error(request.header.request_id, 1),
+        }
     }
 
     fn on_connect(&self, _ctx: &ConnectionContext) -> libdriver::Result<()> {
@@ -54,19 +84,7 @@ impl RequestHandler for NvmeDriverHandler {
     fn on_disconnect(&self, _ctx: &ConnectionContext) {}
 }
 
-async fn nvme_daemon(idx: usize, ns_idx: usize, ns: Arc<NvmeNamespace>) {
-    let name = format!("nvme{}n{}", idx, ns_idx);
-
-    let nvme_server = ServiceBuilder::new(&name)
-        .build(NvmeDriverHandler(ns))
-        .map_err(|_| Error::new(EINVAL))
-        .expect("Failed to build service");
-
-    nvme_server
-        .run()
-        .map_err(|_| Error::new(EINVAL))
-        .expect("Failed to run service");
-}
+pub static NVME_SERVICES: Mutex<Vec<DriverServer>> = Mutex::new(Vec::new());
 
 fn nvme_main() -> radon_kernel::Result<()> {
     let pci_service = DriverClient::connect("pci").map_err(|_| Error::new(ENOENT))?;
@@ -107,14 +125,22 @@ fn nvme_main() -> radon_kernel::Result<()> {
                 && ns.info().capacity != 0
             {
                 info!("Registering namespace {}", ns_idx);
-                spawn(nvme_daemon(idx, ns_idx, ns));
+
+                let name = format!("nvme{}n{}", idx, ns_idx);
+
+                let nvme_server = ServiceBuilder::new(&name)
+                    .build(NvmeDriverHandler(ns))
+                    .map_err(|_| Error::new(EINVAL))
+                    .expect("Failed to build service");
+
+                NVME_SERVICES.lock().push(nvme_server);
             }
         });
     }
 
-    global_executor()
-        .expect("Failed to get global executor")
-        .run();
+    for service in NVME_SERVICES.lock().iter() {
+        service.run_once().map_err(|_| Error::new(EINVAL))?;
+    }
 
     Ok(())
 }

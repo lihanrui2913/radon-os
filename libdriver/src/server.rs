@@ -107,26 +107,32 @@ impl DriverServer {
         &self.name
     }
 
+    pub fn run_once(&self) -> Result<()> {
+        let mut packets = [PortPacket::zeroed(); 32];
+
+        let count = self.port.wait(&mut packets, Deadline::Infinite)?;
+
+        for i in 0..count {
+            let packet = &packets[i];
+
+            if packet.key == 0 {
+                // 接受连接请求
+                self.handle_accept()?;
+            } else {
+                // 客户端消息
+                self.handle_client_event(packet.key, packet.signals)?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// 运行服务器
     pub fn run(&self) -> Result<()> {
         *self.running.lock() = true;
 
-        let mut packets = [PortPacket::zeroed(); 32];
-
         while *self.running.lock() {
-            let count = self.port.wait(&mut packets, Deadline::Infinite)?;
-
-            for i in 0..count {
-                let packet = &packets[i];
-
-                if packet.key == 0 {
-                    // 接受连接请求
-                    self.handle_accept()?;
-                } else {
-                    // 客户端消息
-                    self.handle_client_event(packet.key, packet.signals)?;
-                }
-            }
+            self.run_once()?;
         }
 
         Ok(())

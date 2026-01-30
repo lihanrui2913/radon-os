@@ -15,8 +15,6 @@ pub mod offsets {
     pub const DOORBELL_BASE: usize = 0x1000;
 }
 
-pub use self::offsets::*;
-
 define_regs! {
     pub struct NvmeRegs {
         /// Controller Capabilities - 控制器能力
@@ -50,10 +48,6 @@ define_regs! {
         acq: u64 where offsets::ACQ,
     }
 }
-
-// ============================================================================
-// 寄存器位域定义
-// ============================================================================
 
 /// CAP (Controller Capabilities) 寄存器位域
 pub mod cap {
@@ -202,10 +196,6 @@ pub mod aqa {
         ((cq_size - 1) as u32) << ACQS_SHIFT | ((sq_size - 1) as u32)
     }
 }
-
-// ============================================================================
-// 扩展 NvmeRegs 以支持门铃寄存器
-// ============================================================================
 
 impl NvmeRegs {
     /// 获取底层 MMIO 区域的引用

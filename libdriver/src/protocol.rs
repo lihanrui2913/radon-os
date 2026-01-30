@@ -241,16 +241,6 @@ pub struct IoRequest {
     pub flags: u32,
 }
 
-/// 读写响应
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct IoResponse {
-    /// 实际传输字节数
-    pub transferred: u32,
-    /// 状态
-    pub status: i32,
-}
-
 /// Ioctl 请求
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]

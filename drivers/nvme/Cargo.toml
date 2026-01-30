@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+block_protocol = { path = "../block_protocol" }
 libdriver = { path = "../../libdriver" }
 libradon = { path = "../../libradon" }
 pcid = { path = "../pci" }
