@@ -80,6 +80,7 @@ run-x86_64: edk2-ovmf aether-$(ARCH).img
 		-device qemu-xhci,id=xhci \
 		-device usb-kbd \
 		-device usb-mouse \
+		-device ahci,id=ahci \
 		-drive if=pflash,unit=0,format=raw,file=edk2-ovmf/ovmf-code-$(ARCH).fd,readonly=on \
 		-drive if=none,file=aether-$(ARCH).img,format=raw,id=hdd \
 		-device nvme,drive=hdd,serial=hdd \

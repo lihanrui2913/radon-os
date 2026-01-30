@@ -1,0 +1,12 @@
+[package]
+name = "ahci"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+block_protocol = { path = "../block_protocol" }
+libdriver = { path = "../../libdriver" }
+libradon = { path = "../../libradon" }
+pcid = { path = "../pci" }
+radon_kernel = { path = "../../kernel" }
+spin = "0.10.0"
