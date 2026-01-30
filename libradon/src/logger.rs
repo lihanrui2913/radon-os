@@ -1,5 +1,6 @@
 use core::fmt::{self, Write};
 
+use alloc::format;
 use log::{Level, Record, set_logger, set_max_level};
 use log::{LevelFilter, Log, Metadata};
 use radon_kernel::nr::SYS_LOG;
@@ -10,16 +11,16 @@ pub fn init() {
     set_max_level(LevelFilter::Trace);
 }
 
-pub struct KernelWriter;
+pub struct UserLoggerWriter;
 
-impl Write for KernelWriter {
+impl Write for UserLoggerWriter {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         unsafe { crate::syscall::syscall2(SYS_LOG, s.as_ptr() as usize, s.len()) };
         Ok(())
     }
 }
 
-pub static LOCKED_KERNEL_WRITER: Mutex<KernelWriter> = Mutex::new(KernelWriter);
+pub static LOCKED_KERNEL_WRITER: Mutex<UserLoggerWriter> = Mutex::new(UserLoggerWriter);
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
@@ -36,18 +37,10 @@ macro_rules! print {
 #[macro_export]
 macro_rules! println {
     () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)))
-}
-
-macro_rules! log_output {
-    ($color:expr, $level:expr, $args:expr, $($extra:tt)*) => {
-        crate::println!(
-            "[{}] {}{}",
-            format_args!("\x1b[{}m{}\x1b[0m", $color, $level),
-            $args,
-            format_args!($($extra)*)
-        );
-    };
+    ($($arg:tt)*) => (
+        let __content = format!("{}\n", format_args!($($arg)*));
+        $crate::print!("{}", __content)
+    )
 }
 
 struct Logger;
@@ -65,9 +58,18 @@ impl Logger {
         if with_location {
             let file = record.file().unwrap();
             let line = record.line().unwrap();
-            log_output!(color, record.level(), record.args(), ", {}:{}", file, line);
+            crate::println!(
+                "[{}] {}{}",
+                format_args!("\x1b[{}m{}\x1b[0m", color, record.level().as_str()),
+                record.args(),
+                format_args!(", {}:{}", file, line)
+            );
         } else {
-            log_output!(color, record.level(), record.args(), "");
+            crate::println!(
+                "[{}] {}",
+                format_args!("\x1b[{}m{}\x1b[0m", color, record.level().as_str()),
+                record.args(),
+            );
         }
     }
 }

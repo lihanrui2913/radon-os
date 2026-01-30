@@ -9,23 +9,23 @@ use core::fmt::Display;
 use acpid::protocol::AcpiMcfg;
 use alloc::{string::String, vec::Vec};
 use libdriver::{
-    DriverClient, DriverOp, Request, Response, ServiceBuilder,
     server::{ConnectionContext, RequestContext, RequestHandler},
+    DriverClient, DriverOp, Request, Response, ServiceBuilder,
 };
 use libradon::{
     debug, error, info,
-    memory::{MappingFlags, Vmo, map_vmo},
+    memory::{map_vmo, MappingFlags, Vmo},
 };
 use pci_types::{
-    Bar, BaseClass, CommandRegister, ConfigRegionAccess, DeviceId, DeviceRevision, EndpointHeader,
-    HeaderType, Interface, MAX_BARS, PciAddress, PciHeader, PciPciBridgeHeader, SubClass,
-    SubsystemId, SubsystemVendorId, VendorId, device_type::DeviceType,
+    device_type::DeviceType, Bar, BaseClass, CommandRegister, ConfigRegionAccess, DeviceId,
+    DeviceRevision, EndpointHeader, HeaderType, Interface, PciAddress, PciHeader,
+    PciPciBridgeHeader, SubClass, SubsystemId, SubsystemVendorId, VendorId, MAX_BARS,
 };
 use pcid::protocol::{
-    BAR_TYPE_IO, BAR_TYPE_MMIO, BarInfo, PCI_STATUS_NOT_FOUND, PciDeviceInfo,
-    PciGetDeviceInfoRequest,
+    BarInfo, PciDeviceInfo, PciGetDeviceInfoRequest, BAR_TYPE_IO, BAR_TYPE_MMIO,
+    PCI_STATUS_NOT_FOUND,
 };
-use radon_kernel::{EINVAL, ENOENT, Error};
+use radon_kernel::{Error, EINVAL, ENOENT};
 use spin::Mutex;
 
 /// Pci 进程主入口

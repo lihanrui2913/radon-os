@@ -12,7 +12,7 @@ use libdriver::{
 };
 use libradon::{error, info};
 use pcid::protocol::{PciDeviceInfo, PciGetDeviceInfoRequest};
-use radon_kernel::{EINVAL, ENOENT, EOPNOTSUPP, Error};
+use radon_kernel::{EINVAL, ENOENT, EOPNOTSUPP, Error, Result};
 use spin::Mutex;
 
 use crate::nvme::{NvmeController, NvmeNamespace};
@@ -43,6 +43,100 @@ pub extern "C" fn _start() -> ! {
 
 struct NvmeDriverHandler(Arc<NvmeNamespace>);
 
+impl NvmeDriverHandler {
+    pub fn read_block(&self, start_byte: u64, buf: &mut [u8]) -> Result<()> {
+        if buf.is_empty() {
+            return Ok(());
+        }
+
+        let block_size = self.0.info().block_size as usize;
+
+        let start = start_byte as usize;
+        let end = start + buf.len();
+
+        let start_block_id = start / block_size;
+        let end_block_id = (end - 1) / block_size;
+
+        let mut temp_block = Vec::with_capacity(block_size);
+        let mut buf_offset = 0;
+
+        for block_id in start_block_id..=end_block_id {
+            self.0.read_to_slice(block_id as u64, &mut temp_block)?;
+
+            let block_start_byte = block_id * block_size;
+
+            let offset_in_block = if block_id == start_block_id {
+                start - block_start_byte
+            } else {
+                0
+            };
+
+            let end_in_block = if block_id == end_block_id {
+                end - block_start_byte
+            } else {
+                block_size
+            };
+
+            let bytes_to_copy = end_in_block - offset_in_block;
+
+            buf[buf_offset..buf_offset + bytes_to_copy]
+                .copy_from_slice(&temp_block[offset_in_block..end_in_block]);
+
+            buf_offset += bytes_to_copy;
+        }
+
+        Ok(())
+    }
+
+    pub fn write_block(&self, start_byte: u64, buf: &[u8]) -> Result<()> {
+        if buf.is_empty() {
+            return Ok(());
+        }
+
+        let block_size = self.0.info().block_size as usize;
+
+        let start = start_byte as usize;
+        let end = start + buf.len();
+
+        let start_block_id = start / block_size;
+        let end_block_id = (end - 1) / block_size;
+
+        let mut temp_block = Vec::with_capacity(block_size);
+        let mut buf_offset = 0;
+
+        for block_id in start_block_id..=end_block_id {
+            let block_start_byte = block_id * block_size;
+
+            let offset_in_block = if block_id == start_block_id {
+                start - block_start_byte
+            } else {
+                0
+            };
+
+            let end_in_block = if block_id == end_block_id {
+                end - block_start_byte
+            } else {
+                block_size
+            };
+
+            let bytes_to_copy = end_in_block - offset_in_block;
+
+            if offset_in_block != 0 || end_in_block != block_size {
+                self.0.read_to_slice(block_id as u64, &mut temp_block)?;
+            }
+
+            temp_block[offset_in_block..end_in_block]
+                .copy_from_slice(&buf[buf_offset..buf_offset + bytes_to_copy]);
+
+            self.0.write_from_slice(block_id as u64, &temp_block)?;
+
+            buf_offset += bytes_to_copy;
+        }
+
+        Ok(())
+    }
+}
+
 impl RequestHandler for NvmeDriverHandler {
     fn handle(&self, request: &Request, _ctx: &RequestContext) -> Response {
         match DriverOp::from(request.header.op) {
@@ -50,7 +144,7 @@ impl RequestHandler for NvmeDriverHandler {
                 let io_request =
                     unsafe { (request.data.as_ptr() as *const IoRequest).as_ref() }.unwrap();
                 let mut buf = Vec::with_capacity(io_request.length as usize);
-                if let Err(_) = self.0.read_to_slice(io_request.offset, &mut buf) {
+                if let Err(_) = self.read_block(io_request.offset, &mut buf) {
                     Response::error(request.header.request_id, BLOCK_ERR_IO)
                 } else {
                     Response::success(request.header.request_id).with_data(buf)
@@ -65,7 +159,7 @@ impl RequestHandler for NvmeDriverHandler {
                         io_request.length as usize,
                     )
                 };
-                if let Err(_) = self.0.write_from_slice(io_request.offset, buf) {
+                if let Err(_) = self.write_block(io_request.offset, buf) {
                     Response::error(request.header.request_id, BLOCK_ERR_IO)
                 } else {
                     Response::success(request.header.request_id)

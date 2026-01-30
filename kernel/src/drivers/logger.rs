@@ -8,18 +8,9 @@ pub fn init() {
 
 macro_rules! log_output {
     ($color:expr, $level:expr, $args:expr, $($extra:tt)*) => {
-        crate::serial_println!(
-            "[{}] {}{}",
-            format_args!("\x1b[{}m{}\x1b[0m", $color, $level),
-            $args,
-            format_args!($($extra)*)
-        );
-        crate::println!(
-            "[{}] {}{}",
-            format_args!("\x1b[{}m{}\x1b[0m", $color, $level),
-            $args,
-            format_args!($($extra)*)
-        );
+        let content = format!("[{}] {}{}", format_args!("\x1b[{}m{}\x1b[0m", $color, $level), $args, format_args!($($extra)*));
+        crate::serial_println!("{}", content);
+        crate::println!("{}", content);
     };
 }
 
@@ -47,7 +38,8 @@ impl Logger {
 
 impl Log for Logger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Trace
+        let directive = metadata.target();
+        directive.starts_with(env!("CARGO_PKG_NAME"))
     }
 
     fn log(&self, record: &Record) {
