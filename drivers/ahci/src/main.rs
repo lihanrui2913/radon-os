@@ -7,9 +7,9 @@ use alloc::format;
 use libdriver::{DriverClient, DriverOp};
 use libradon::{error, info};
 use pcid::protocol::{PciDeviceInfo, PciGetDeviceInfoRequest};
-use radon_kernel::{ENOENT, EOPNOTSUPP, Error};
+use radon_kernel::{Error, ENOENT, EOPNOTSUPP};
 
-/// Nvme 进程主入口
+/// Ahci 进程主入口
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
     match libradon::init() {
@@ -18,7 +18,7 @@ pub extern "C" fn _start() -> ! {
                 libradon::process::exit(0);
             }
             Err(_) => {
-                error!("nvme: main function have some problems");
+                error!("ahci: main function have some problems");
                 libradon::process::exit(-1)
             }
         },
@@ -49,8 +49,8 @@ fn ahci_main() -> radon_kernel::Result<()> {
     for (idx, pci_device_info) in pci_device_infos.iter().enumerate() {
         let name = format!("ahci{}", idx);
         info!(
-            "{}: {}, bar0: {}",
-            name, pci_device_info, pci_device_info.bars[0]
+            "{}: {}, bar5: {}",
+            name, pci_device_info, pci_device_info.bars[5]
         );
     }
 

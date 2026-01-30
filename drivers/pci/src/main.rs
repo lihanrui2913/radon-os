@@ -352,7 +352,6 @@ fn pci_main() -> radon_kernel::Result<()> {
             MappingFlags::READ | MappingFlags::WRITE,
         )?;
 
-        // let segment_group = mcfg_entry.segment_group;
         entries.push(AcpiMcfgEntry::new(
             *mcfg_entry,
             vaddr as usize + (region_base_addr as usize - aligned_region_base_addr as usize),
