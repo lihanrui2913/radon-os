@@ -7,7 +7,7 @@ use alloc::format;
 use libdriver::{DriverClient, DriverOp};
 use libradon::{error, info};
 use pcid::protocol::{PciDeviceInfo, PciGetDeviceInfoRequest};
-use radon_kernel::{Error, ENOENT, EOPNOTSUPP};
+use radon_kernel::{ENOENT, EOPNOTSUPP, Error};
 
 /// Ahci 进程主入口
 #[unsafe(no_mangle)]
@@ -22,10 +22,7 @@ pub extern "C" fn _start() -> ! {
                 libradon::process::exit(-1)
             }
         },
-        Err(_) => {
-            // 日志错误
-            libradon::process::exit(-1);
-        }
+        Err(_) => libradon::process::exit(-1),
     }
 }
 

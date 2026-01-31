@@ -3,11 +3,11 @@
 
 extern crate alloc;
 
-use bootstrap::{protocol::services, BootstrapClient};
+use bootstrap::{BootstrapClient, protocol::services};
 use libradon::{error, info};
 use nameserver::server::{Config, NameServer};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
     match libradon::init() {
         Ok(()) => match nameserver_main() {

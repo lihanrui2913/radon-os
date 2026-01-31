@@ -30,10 +30,7 @@ pub extern "C" fn _start() -> ! {
                 libradon::process::exit(-1)
             }
         },
-        Err(_) => {
-            // 日志错误
-            libradon::process::exit(-1);
-        }
+        Err(_) => libradon::process::exit(-1),
     }
 }
 
@@ -99,6 +96,8 @@ static ACPI_ELF: &'static [u8] = include_bytes!("../../drivers/acpi/build/acpi.e
 static PCI_ELF: &'static [u8] = include_bytes!("../../drivers/pci/build/pci.elf");
 static NVME_ELF: &'static [u8] = include_bytes!("../../drivers/nvme/build/nvme.elf");
 static AHCI_ELF: &'static [u8] = include_bytes!("../../drivers/ahci/build/ahci.elf");
+static NAMESPACE_ELF: &'static [u8] = include_bytes!("../../drivers/namespace/build/namespace.elf");
+static ROOTNS_ELF: &'static [u8] = include_bytes!("../../drivers/rootns/build/rootns.elf");
 
 /// 启动核心服务
 fn start_core_services(bootstrap: &BootstrapHandler) -> Result<(), InitError> {
@@ -106,6 +105,8 @@ fn start_core_services(bootstrap: &BootstrapHandler) -> Result<(), InitError> {
     start_service(bootstrap, "pci", PCI_ELF, false)?;
     start_service(bootstrap, "nvme", NVME_ELF, false)?;
     start_service(bootstrap, "ahci", AHCI_ELF, false)?;
+    start_service(bootstrap, "namespace", NAMESPACE_ELF, false)?;
+    start_service(bootstrap, "rootns", ROOTNS_ELF, false)?;
     Ok(())
 }
 

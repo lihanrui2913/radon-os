@@ -11,9 +11,9 @@ use spin::Mutex;
 use libradon::{channel::Channel, handle::Handle};
 
 use crate::protocol::*;
+use crate::server::ClientConnection;
 use crate::server::registry::ServiceRegistry;
 use crate::server::watcher::WatcherManager;
-use crate::server::ClientConnection;
 
 /// 响应
 pub struct Response {
@@ -114,7 +114,8 @@ impl RequestHandler {
             return Response::error(sequence, Status::InvalidArgument);
         }
 
-        let req: &RegisterRequest = unsafe { &*(data.as_ptr() as *const RegisterRequest) };
+        let req: RegisterRequest =
+            unsafe { (data.as_ptr() as *const RegisterRequest).read_unaligned() };
 
         let name_start = core::mem::size_of::<RegisterRequest>();
         let name_end = name_start + req.name_len as usize;
@@ -235,7 +236,8 @@ impl RequestHandler {
             return Response::error(sequence, Status::InvalidArgument);
         }
 
-        let req: &LookupRequest = unsafe { &*(data.as_ptr() as *const LookupRequest) };
+        let req: LookupRequest =
+            unsafe { (data.as_ptr() as *const LookupRequest).read_unaligned() };
 
         let name_start = core::mem::size_of::<LookupRequest>();
         let name_end = name_start + req.name_len as usize;
@@ -272,7 +274,8 @@ impl RequestHandler {
             return Response::error(sequence, Status::InvalidArgument);
         }
 
-        let req: &LookupRequest = unsafe { &*(data.as_ptr() as *const LookupRequest) };
+        let req: LookupRequest =
+            unsafe { (data.as_ptr() as *const LookupRequest).read_unaligned() };
 
         let name_start = core::mem::size_of::<LookupRequest>();
         let name_end = name_start + req.name_len as usize;
@@ -323,7 +326,7 @@ impl RequestHandler {
             return Response::error(sequence, Status::InvalidArgument);
         }
 
-        let req: &ListRequest = unsafe { &*(data.as_ptr() as *const ListRequest) };
+        let req: ListRequest = unsafe { (data.as_ptr() as *const ListRequest).read_unaligned() };
 
         let prefix_start = core::mem::size_of::<ListRequest>();
         let prefix_end = prefix_start + req.prefix_len as usize;
@@ -404,7 +407,7 @@ impl RequestHandler {
             return Response::error(sequence, Status::InvalidArgument);
         }
 
-        let req: &WatchRequest = unsafe { &*(data.as_ptr() as *const WatchRequest) };
+        let req: WatchRequest = unsafe { (data.as_ptr() as *const WatchRequest).read_unaligned() };
 
         let pattern = if req.name_len > 0 {
             let name_start = core::mem::size_of::<WatchRequest>();

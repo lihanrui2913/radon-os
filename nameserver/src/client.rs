@@ -186,8 +186,8 @@ impl NameService {
 
         // 解析响应
         if resp_data.len() >= core::mem::size_of::<RegisterResponse>() {
-            let resp: &RegisterResponse =
-                unsafe { &*(resp_data.as_ptr() as *const RegisterResponse) };
+            let resp: RegisterResponse =
+                unsafe { (resp_data.as_ptr() as *const RegisterResponse).read_unaligned() };
 
             Ok(ServiceHandle {
                 service_id: resp.service_id,
@@ -408,7 +408,7 @@ impl NameService {
             return Err(Error::InvalidArgument);
         }
 
-        Ok(unsafe { core::ptr::read(data.as_ptr() as *const ServiceInfo) })
+        Ok(unsafe { core::ptr::read_unaligned(data.as_ptr() as *const ServiceInfo) })
     }
 
     fn parse_service_list(data: &[u8]) -> Result<Vec<ServiceInfo>> {
@@ -416,7 +416,7 @@ impl NameService {
             return Err(Error::InvalidArgument);
         }
 
-        let resp: &ListResponse = unsafe { &*(data.as_ptr() as *const ListResponse) };
+        let resp: ListResponse = unsafe { (data.as_ptr() as *const ListResponse).read_unaligned() };
 
         let mut services = Vec::with_capacity(resp.returned_count as usize);
         let mut offset = core::mem::size_of::<ListResponse>();
@@ -426,8 +426,9 @@ impl NameService {
                 break;
             }
 
-            let info: ServiceInfo =
-                unsafe { core::ptr::read((data.as_ptr() as usize + offset) as *const ServiceInfo) };
+            let info: ServiceInfo = unsafe {
+                core::ptr::read_unaligned((data.as_ptr() as usize + offset) as *const ServiceInfo)
+            };
 
             offset += core::mem::size_of::<ServiceInfo>()
                 + info.name_len as usize
@@ -447,8 +448,8 @@ impl NameService {
             return Err(Error::InvalidArgument);
         }
 
-        let notif_data: &NotificationData =
-            unsafe { &*(payload.as_ptr() as *const NotificationData) };
+        let notif_data: NotificationData =
+            unsafe { (payload.as_ptr() as *const NotificationData).read_unaligned() };
 
         let name_start = core::mem::size_of::<NotificationData>();
         let name_bytes = &payload[name_start..name_start + notif_data.name_len as usize];

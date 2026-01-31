@@ -2,8 +2,8 @@
 #![no_main]
 #![allow(unsafe_op_in_unsafe_fn)]
 
-use alloc::{format, sync::Arc, vec::Vec};
-use block_protocol::protocol::BLOCK_ERR_IO;
+use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
+use block_protocol::protocol::{BLOCK_ERR_IO, BlockDevice, PartitionDevice, probe_parititons};
 use libdriver::{
     DriverClient, DriverOp, DriverServer, PhysAddr, Request, RequestHandler, Response,
     ServiceBuilder,
@@ -34,17 +34,15 @@ pub extern "C" fn _start() -> ! {
                 libradon::process::exit(-1)
             }
         },
-        Err(_) => {
-            // 日志错误
-            libradon::process::exit(-1);
-        }
+        Err(_) => libradon::process::exit(-1),
     }
 }
 
+#[derive(Clone)]
 struct NvmeDriverHandler(Arc<NvmeNamespace>);
 
-impl NvmeDriverHandler {
-    pub fn read_block(&self, start_byte: u64, buf: &mut [u8]) -> Result<()> {
+impl BlockDevice for NvmeDriverHandler {
+    fn read_block(&self, start_byte: u64, buf: &mut [u8]) -> Result<()> {
         if buf.is_empty() {
             return Ok(());
         }
@@ -57,7 +55,7 @@ impl NvmeDriverHandler {
         let start_block_id = start / block_size;
         let end_block_id = (end - 1) / block_size;
 
-        let mut temp_block = Vec::with_capacity(block_size);
+        let mut temp_block = vec![0u8; block_size];
         let mut buf_offset = 0;
 
         for block_id in start_block_id..=end_block_id {
@@ -88,7 +86,7 @@ impl NvmeDriverHandler {
         Ok(())
     }
 
-    pub fn write_block(&self, start_byte: u64, buf: &[u8]) -> Result<()> {
+    fn write_block(&self, start_byte: u64, buf: &[u8]) -> Result<()> {
         if buf.is_empty() {
             return Ok(());
         }
@@ -101,7 +99,7 @@ impl NvmeDriverHandler {
         let start_block_id = start / block_size;
         let end_block_id = (end - 1) / block_size;
 
-        let mut temp_block = Vec::with_capacity(block_size);
+        let mut temp_block = vec![0u8; block_size];
         let mut buf_offset = 0;
 
         for block_id in start_block_id..=end_block_id {
@@ -134,6 +132,10 @@ impl NvmeDriverHandler {
         }
 
         Ok(())
+    }
+
+    fn size(&self) -> usize {
+        self.0.info().capacity as usize
     }
 }
 
@@ -180,6 +182,17 @@ impl RequestHandler for NvmeDriverHandler {
 
 pub static NVME_SERVICES: Mutex<Vec<DriverServer>> = Mutex::new(Vec::new());
 
+fn nvme_register_partdev(name: String, part_dev: PartitionDevice) {
+    info!("Registering partition {}", name);
+
+    let part_server = ServiceBuilder::new(&name)
+        .build(part_dev)
+        .map_err(|_| Error::new(EINVAL))
+        .expect("Failed to build service");
+
+    NVME_SERVICES.lock().push(part_server);
+}
+
 fn nvme_main() -> radon_kernel::Result<()> {
     let pci_service = DriverClient::connect("pci").map_err(|_| Error::new(ENOENT))?;
     let mut request = PciGetDeviceInfoRequest::default();
@@ -218,16 +231,18 @@ fn nvme_main() -> radon_kernel::Result<()> {
             if let Ok(ns) = controller.get_namespace(ns_idx as u32)
                 && ns.info().capacity != 0
             {
-                info!("Registering namespace {}", ns_idx);
-
                 let name = format!("nvme{}n{}", idx, ns_idx);
 
+                let block_dev = NvmeDriverHandler(ns);
+
                 let nvme_server = ServiceBuilder::new(&name)
-                    .build(NvmeDriverHandler(ns))
+                    .build(block_dev.clone())
                     .map_err(|_| Error::new(EINVAL))
                     .expect("Failed to build service");
 
                 NVME_SERVICES.lock().push(nvme_server);
+
+                let _ = probe_parititons(&name, Arc::new(block_dev.clone()), nvme_register_partdev);
             }
         });
     }

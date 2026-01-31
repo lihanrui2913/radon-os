@@ -2,7 +2,9 @@ use core::{hint::spin_loop, panic::PanicInfo, ptr::addr_of_mut};
 
 use alloc::{boxed::Box, format};
 use limine::request::ExecutableFileRequest;
+use log::debug;
 use object::{File, Object, ObjectSymbol};
+use radon_kernel::object::process::current_process;
 use rustc_demangle::demangle;
 use spin::Lazy;
 use unwinding::{
@@ -57,6 +59,10 @@ fn panic(info: &PanicInfo) -> ! {
         struct NoPayload;
         let code = begin_panic(Box::new(NoPayload));
         log::error!("Unwind reason code: {}", code.0);
+    }
+
+    if let Some(process) = current_process() {
+        debug!("Faulting process name: {}", process.read().name());
     }
 
     loop {

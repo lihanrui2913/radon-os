@@ -86,7 +86,7 @@ impl MessageHeader {
         if bytes.len() < Self::SIZE {
             return None;
         }
-        Some(unsafe { core::ptr::read(bytes.as_ptr() as *const Self) })
+        Some(unsafe { core::ptr::read_unaligned(bytes.as_ptr() as *const Self) })
     }
 }
 

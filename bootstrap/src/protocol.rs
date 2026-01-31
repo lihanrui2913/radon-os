@@ -105,7 +105,7 @@ impl BootstrapRequest {
         if bytes.len() < Self::SIZE {
             return None;
         }
-        let req: Self = unsafe { core::ptr::read(bytes.as_ptr() as *const Self) };
+        let req: Self = unsafe { core::ptr::read_unaligned(bytes.as_ptr() as *const Self) };
         if req.is_valid() { Some(req) } else { None }
     }
 }
@@ -167,7 +167,7 @@ impl BootstrapResponse {
         if bytes.len() < Self::SIZE {
             return None;
         }
-        Some(unsafe { core::ptr::read(bytes.as_ptr() as *const Self) })
+        Some(unsafe { core::ptr::read_unaligned(bytes.as_ptr() as *const Self) })
     }
 }
 

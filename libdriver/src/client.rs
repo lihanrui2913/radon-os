@@ -173,6 +173,10 @@ impl DriverClient {
         }
     }
 
+    pub fn with_nodrop(&mut self, nodrop: bool) {
+        self.channel.with_nodrop(nodrop);
+    }
+
     /// 获取底层 Channel
     pub fn channel(&self) -> &Channel {
         &self.channel

@@ -41,10 +41,7 @@ pub extern "C" fn _start() -> ! {
                 libradon::process::exit(-1)
             }
         },
-        Err(_) => {
-            // 日志错误
-            libradon::process::exit(-1);
-        }
+        Err(_) => libradon::process::exit(-1),
     }
 }
 

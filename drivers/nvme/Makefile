@@ -15,7 +15,7 @@ export BUILD = $(SOURCE)/build
 .PHONY: $(BUILD)/nvme-$(ARCH).elf
 $(BUILD)/nvme-$(ARCH).elf:
 	mkdir -p $(BUILD)
-	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET) -Z build-std=core,alloc -Zbuild-std-features=compiler-builtins-mem
+	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET) -Zbuild-std-features=compiler-builtins-mem
 	cp target/$(RUST_TARGET)/$(RUST_PROFILE_SUBDIR)/nvmed $(BUILD)/nvme-$(ARCH).elf
 	cp $(BUILD)/nvme-$(ARCH).elf $(BUILD)/nvme.elf
 

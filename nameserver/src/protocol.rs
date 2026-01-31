@@ -196,7 +196,7 @@ impl MessageHeader {
         if bytes.len() < Self::SIZE {
             return None;
         }
-        let header: Self = unsafe { core::ptr::read(bytes.as_ptr() as *const Self) };
+        let header: Self = unsafe { core::ptr::read_unaligned(bytes.as_ptr() as *const Self) };
         if header.is_valid() {
             Some(header)
         } else {

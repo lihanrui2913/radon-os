@@ -15,7 +15,7 @@ export BUILD = $(SOURCE)/build
 .PHONY: $(BUILD)/nameserver-$(ARCH).elf
 $(BUILD)/nameserver-$(ARCH).elf:
 	mkdir -p $(BUILD)
-	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET) --bin nameserver -Z build-std=core,alloc -Zbuild-std-features=compiler-builtins-mem --features="server bootstrap/client"
+	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET) --bin nameserver -Zbuild-std-features=compiler-builtins-mem --features="server bootstrap/client"
 	cp target/$(RUST_TARGET)/$(RUST_PROFILE_SUBDIR)/nameserver $(BUILD)/nameserver-$(ARCH).elf
 	cp $(BUILD)/nameserver-$(ARCH).elf $(BUILD)/nameserver.elf
 

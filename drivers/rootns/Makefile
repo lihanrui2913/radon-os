@@ -12,12 +12,12 @@ MANIFEST := $(SOURCE)/Cargo.toml
 
 export BUILD = $(SOURCE)/build
 
-.PHONY: $(BUILD)/ahci-$(ARCH).elf
-$(BUILD)/ahci-$(ARCH).elf:
+.PHONY: $(BUILD)/rootns-$(ARCH).elf
+$(BUILD)/rootns-$(ARCH).elf:
 	mkdir -p $(BUILD)
 	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET) -Zbuild-std-features=compiler-builtins-mem
-	cp target/$(RUST_TARGET)/$(RUST_PROFILE_SUBDIR)/ahci $(BUILD)/ahci-$(ARCH).elf
-	cp $(BUILD)/ahci-$(ARCH).elf $(BUILD)/ahci.elf
+	cp target/$(RUST_TARGET)/$(RUST_PROFILE_SUBDIR)/rootns $(BUILD)/rootns-$(ARCH).elf
+	cp $(BUILD)/rootns-$(ARCH).elf $(BUILD)/rootns.elf
 
 clippy:
 	cargo clippy --target $(RUST_TARGET) -Zbuild-std=core,alloc

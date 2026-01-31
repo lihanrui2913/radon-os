@@ -1,11 +1,11 @@
 use crate::{arch::CurrentRmmArch, init::memory::PAGE_SIZE};
-use good_memory_allocator::SpinLockedAllocator;
+use linked_list_allocator::LockedHeap;
 use rmm::{PageFlags, PageMapper, VirtualAddress};
 
 use crate::init::memory::FRAME_ALLOCATOR;
 
 #[global_allocator]
-pub static HEAP_ALLOCATOR: SpinLockedAllocator = SpinLockedAllocator::empty();
+pub static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 pub const KERNEL_HEAP_START: usize = 0xffffffff_c0000000;
 pub const KERNEL_HEAP_SIZE: usize = 64 * 1024 * 1024;
@@ -20,5 +20,9 @@ pub fn init() {
         unsafe { mapper.map(virt, flags).unwrap().flush() };
     }
 
-    unsafe { HEAP_ALLOCATOR.init(KERNEL_HEAP_START, KERNEL_HEAP_SIZE) };
+    unsafe {
+        HEAP_ALLOCATOR
+            .lock()
+            .init(KERNEL_HEAP_START as *mut u8, KERNEL_HEAP_SIZE)
+    };
 }

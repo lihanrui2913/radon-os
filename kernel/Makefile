@@ -21,7 +21,7 @@ endif
 .PHONY: $(BUILD)/kernel-$(ARCH).elf
 $(BUILD)/kernel-$(ARCH).elf:
 	mkdir -p $(BUILD)
-	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET) -Z build-std=core,alloc -Zbuild-std-features=compiler-builtins-mem
+	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET) -Zbuild-std-features=compiler-builtins-mem
 	cp target/$(RUST_TARGET)/$(RUST_PROFILE_SUBDIR)/radon_kernel $(BUILD)/kernel-$(ARCH).elf
 
 clippy:
@@ -45,7 +45,7 @@ initramfs-$(ARCH).img: ../init/build/init-$(ARCH).elf
 .PHONY: aether-$(ARCH).img
 aether-$(ARCH).img: limine/limine initramfs-$(ARCH).img $(BUILD)/kernel-$(ARCH).elf
 	rm -f aether-$(ARCH).img
-	dd if=/dev/zero bs=1M count=0 seek=128 of=aether-$(ARCH).img
+	dd if=/dev/zero bs=1M count=0 seek=256 of=aether-$(ARCH).img
 	sgdisk aether-$(ARCH).img -n 1:2048 -t 1:ef00
 	mformat -i aether-$(ARCH).img@@1M
 	mmd -i aether-$(ARCH).img@@1M ::/EFI ::/EFI/BOOT ::/boot ::/boot/limine

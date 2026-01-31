@@ -1,10 +1,13 @@
 [package]
-name = "block_protocol"
+name = "rootns"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-gpt_disk_io = "0.16.2"
+bitflags = "2.10.0"
 libdriver = { path = "../../libdriver" }
 libradon = { path = "../../libradon" }
+namespace = { path = "../namespace" }
 radon_kernel = { path = "../../kernel" }
+spin = "0.10.0"
+
