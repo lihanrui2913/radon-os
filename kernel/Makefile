@@ -17,6 +17,11 @@ QEMUFLAGS ?= -m 4G -serial stdio
 ifneq ($(DEBUG), 0)
 QEMUFLAGS += -s -S
 endif
+ifneq ($(KVM), 0)
+QEMUFLAGS += -cpu host --enable-kvm
+else
+QEMUFLAGS += -cpu max
+endif
 
 .PHONY: $(BUILD)/kernel-$(ARCH).elf
 $(BUILD)/kernel-$(ARCH).elf:
@@ -76,7 +81,6 @@ run-x86_64: edk2-ovmf aether-$(ARCH).img
 	qemu-system-x86_64 \
 		-M q35 \
 		-smp $(SMP) \
-		-cpu max \
 		-device qemu-xhci,id=xhci \
 		-device usb-kbd \
 		-device usb-mouse \

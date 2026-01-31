@@ -111,6 +111,7 @@ pub unsafe fn calibrate_timer() {
         calibrated_timer_initial,
         core::sync::atomic::Ordering::SeqCst,
     );
+    lapic.enable_timer();
 }
 
 pub fn init() {

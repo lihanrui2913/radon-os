@@ -9,23 +9,23 @@ use core::fmt::Display;
 use acpid::protocol::AcpiMcfg;
 use alloc::{string::String, vec::Vec};
 use libdriver::{
-    DriverClient, DriverOp, Request, Response, ServiceBuilder,
     server::{ConnectionContext, RequestContext, RequestHandler},
+    DriverClient, DriverOp, Request, Response, ServiceBuilder,
 };
 use libradon::{
     debug, error, info,
-    memory::{MappingFlags, Vmo, map_vmo},
+    memory::{map_vmo, MappingFlags, Vmo},
 };
 use pci_types::{
-    Bar, BaseClass, CommandRegister, ConfigRegionAccess, DeviceId, DeviceRevision, EndpointHeader,
-    HeaderType, Interface, MAX_BARS, PciAddress, PciHeader, PciPciBridgeHeader, SubClass,
-    SubsystemId, SubsystemVendorId, VendorId, device_type::DeviceType,
+    device_type::DeviceType, Bar, BaseClass, CommandRegister, ConfigRegionAccess, DeviceId,
+    DeviceRevision, EndpointHeader, HeaderType, Interface, PciAddress, PciHeader,
+    PciPciBridgeHeader, SubClass, SubsystemId, SubsystemVendorId, VendorId, MAX_BARS,
 };
 use pcid::protocol::{
-    BAR_TYPE_IO, BAR_TYPE_MMIO, BarInfo, PCI_STATUS_NOT_FOUND, PciDeviceInfo,
-    PciGetDeviceInfoRequest,
+    BarInfo, PciDeviceInfo, PciGetDeviceInfoRequest, BAR_TYPE_IO, BAR_TYPE_MMIO,
+    PCI_STATUS_NOT_FOUND,
 };
-use radon_kernel::{EINVAL, ENOENT, Error};
+use radon_kernel::{Error, EINVAL, ENOENT};
 use spin::Mutex;
 
 /// Pci 进程主入口
@@ -359,8 +359,12 @@ fn pci_main() -> radon_kernel::Result<()> {
     for entry in mcfg_entries {
         let segment_group = entry.segment_group;
 
-        (entry.bus_start..=entry.bus_end)
-            .for_each(|bus| pci_scan_bus(segment_group, bus, &pci_access));
+        pci_scan_bus(segment_group, 0, &pci_access);
+
+        let address = PciAddress::new(segment_group, 0, 0, 0);
+        if PciHeader::new(address).has_multiple_functions(&pci_access) {
+            (1..8).for_each(|bus| pci_scan_bus(segment_group, bus, &pci_access));
+        }
     }
 
     info!("PCI devices loaded");

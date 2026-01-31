@@ -1,4 +1,4 @@
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use alloc::{
     collections::vec_deque::VecDeque,
@@ -348,6 +348,8 @@ pub fn exit_current(exit_code: i32) -> ! {
     }
 }
 
+pub static TASK_INITIALIZED: AtomicBool = AtomicBool::new(false);
+
 /// 初始化调度系统
 pub fn init() -> Option<ArcTask> {
     for cpu_id in 0..CPU_COUNT.load(Ordering::SeqCst) {
@@ -357,10 +359,14 @@ pub fn init() -> Option<ArcTask> {
         scheduler.write().set_idle_task(idle_task);
     }
 
-    create_kernel_task(
+    let task = create_kernel_task(
         "init".to_string(),
         initial_kernel_thread as *const () as usize,
-    )
+    );
+
+    TASK_INITIALIZED.store(true, Ordering::SeqCst);
+
+    task
 }
 
 /// 调度

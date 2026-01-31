@@ -3,6 +3,7 @@ export RUST_PROFILE ?= dev
 
 export DEBUG ?= 0
 export SMP ?= 2
+export KVM ?= 0
 
 all:
 	$(MAKE) -C nameserver

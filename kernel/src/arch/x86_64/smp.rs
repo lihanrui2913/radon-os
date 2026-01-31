@@ -4,11 +4,12 @@ use alloc::collections::btree_map::BTreeMap;
 use limine::mp::Cpu;
 use rmm::{Arch, PhysicalAddress, TableKind};
 use spin::Mutex;
+use x2apic::lapic::TimerMode;
 
 use crate::{
     arch::{
         CurrentIrqArch, CurrentRmmArch,
-        drivers::apic::{APIC_INITIALIZED, LAPIC, LAPIC_TIMER_INITIAL},
+        drivers::apic::{APIC_INITIALIZED, LAPIC, LAPIC_TIMER_INITIAL, disable_pic},
         gdt::CpuInfo,
         init_sse,
         irq::IrqArch,
@@ -16,7 +17,7 @@ use crate::{
     init::memory::KERNEL_PAGE_TABLE_PHYS,
     smp::{BSP_CPUARCHID, CPU_COUNT, CPUID_TO_ARCHID, MP_REQUEST},
     task::{
-        get_current_task,
+        TASK_INITIALIZED,
         sched::{SCHEDULERS, Scheduler},
     },
 };
@@ -76,6 +77,7 @@ extern "C" fn ap_kmain(cpu: &Cpu) -> ! {
         .get_mut(&(cpu.lapic_id as usize))
         .unwrap()
         .init();
+
     crate::arch::x86_64::irq::init();
 
     while !APIC_INITIALIZED.load(core::sync::atomic::Ordering::SeqCst) {
@@ -86,14 +88,17 @@ extern "C" fn ap_kmain(cpu: &Cpu) -> ! {
 
     if let Some(lapic) = LAPIC.lock().as_mut() {
         unsafe {
+            disable_pic();
             lapic.enable();
+            lapic.set_timer_mode(TimerMode::Periodic);
             lapic.set_timer_initial(timer_initial);
+            lapic.enable_timer();
         };
     }
 
     crate::arch::x86_64::syscall::init();
 
-    while get_current_task().is_none() {
+    while !TASK_INITIALIZED.load(core::sync::atomic::Ordering::SeqCst) {
         spin_loop();
     }
 

@@ -18,7 +18,6 @@ pub use self::irq::X8664IrqArch as CurrentIrqArch;
 pub use self::irq::kernel_thread_entry;
 pub use self::irq::return_from_interrupt;
 pub use self::smp::get_lapicid as get_archid;
-pub use self::syscall::X8664SyscallArch as CurrentSyscallArch;
 pub use self::time::X8664TimeArch as CurrentTimeArch;
 use ::rmm::Arch;
 use ::rmm::TableKind;

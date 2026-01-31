@@ -9,24 +9,7 @@ use x86_64::{
     },
 };
 
-use crate::{
-    arch::{gdt::Selectors, syscall::SyscallArch},
-    task::Task,
-};
-
-pub struct X8664SyscallArch;
-
-impl SyscallArch for X8664SyscallArch {
-    unsafe fn copy_from_user(dst: usize, src: usize, len: usize) -> usize {
-        unsafe { core::ptr::copy_nonoverlapping(src as *const u8, dst as *mut u8, len) };
-        0
-    }
-
-    unsafe fn copy_to_user(dst: usize, src: usize, len: usize) -> usize {
-        unsafe { core::ptr::copy_nonoverlapping(src as *const u8, dst as *mut u8, len) };
-        0
-    }
-}
+use crate::{arch::gdt::Selectors, task::Task};
 
 #[unsafe(naked)]
 unsafe extern "C" fn x8664_syscall_handler() {
