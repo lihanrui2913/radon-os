@@ -1,6 +1,9 @@
 use crate::{
+    ESRCH,
     arch::{Ptrace, irq::IrqRegsArch},
+    object::process::current_process,
     syscall::error::{ENOSYS, Error},
+    task::get_current_task,
 };
 
 pub mod clock;
@@ -85,8 +88,22 @@ pub extern "C" fn syscall_handler(regs: *mut Ptrace) {
             Ok(0)
         }
 
+        SYS_GET_TID => get_current_task()
+            .ok_or(Error::new(ESRCH))
+            .map(|t| t.read().tid()),
+        SYS_GET_PID => current_process()
+            .ok_or(Error::new(ESRCH))
+            .map(|p| p.read().pid()),
+
+        SYS_LOAD_TASK_REGISTERS => kernel::sys_load_task_registers(arg1, arg2 as *mut Ptrace),
+        SYS_STORE_TASK_REGISTERS => kernel::sys_store_task_registers(arg1, arg2 as *const Ptrace),
+
         SYS_KRES_GET_RSDP => kernel::get_rsdp(),
 
+        #[cfg(target_arch = "x86_64")]
+        SYS_KRES_GET_FSBASE => kernel::get_fsbase(arg1),
+        #[cfg(target_arch = "x86_64")]
+        SYS_KRES_SET_FSBASE => kernel::set_fsbase(arg1, arg2),
         _ => {
             warn!("Syscall {} not implemented", idx);
             Err(Error::new(ENOSYS))

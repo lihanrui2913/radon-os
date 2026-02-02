@@ -53,6 +53,9 @@ pub struct Task {
 
     /// 架构相关上下文
     pub arch_context: ArchContext,
+
+    /// 是否正在运行
+    pub running: bool,
 }
 
 pub const IDLE_PRIORITY: usize = 20;
@@ -117,6 +120,7 @@ impl Task {
             syscall_stack_top: syscall_stack_virt.add(STACK_SIZE),
             user_syscall_stack: VirtualAddress::new(0),
             arch_context: ArchContext::default(),
+            running: false,
         };
 
         Arc::new(RwLock::new(task))
@@ -258,7 +262,12 @@ pub fn block_task(task: ArcTask) {
 
     let cpu_id = task.read().get_cpu_id();
     let scheduler = get_scheduler_by_cpuid(cpu_id);
-    scheduler.write().block_task(task);
+    scheduler.write().block_task(task.clone());
+
+    let need_delay = cpu_id != get_current_task().unwrap().read().cpu_id;
+    while need_delay && task.read().running {
+        schedule();
+    }
 }
 
 /// 解除阻塞
@@ -376,7 +385,9 @@ pub fn schedule() {
         .read()
         .get_current_task()
         .expect("Scheduler not initialized");
+    prev.write().running = false;
     let next = current_scheduler.write().schedule();
+    next.write().running = true;
     drop(current_scheduler);
     switch_to(prev, next);
 }

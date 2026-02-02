@@ -87,6 +87,10 @@ impl Vmo {
         self.handle.handle()
     }
 
+    pub fn from_handle(handle: OwnedHandle) -> Self {
+        Self { handle }
+    }
+
     /// 读取数据
     pub fn read(&self, offset: usize, buf: &mut [u8]) -> Result<usize> {
         let ret = unsafe {
@@ -139,6 +143,10 @@ impl Vmo {
         Ok(Vmo {
             handle: OwnedHandle::from_raw(handle),
         })
+    }
+
+    pub fn with_nodrop(&mut self, nodrop: bool) {
+        self.handle.with_nodrop(nodrop);
     }
 }
 

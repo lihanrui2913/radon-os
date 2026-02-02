@@ -6,6 +6,10 @@ pub const NAMESPACE_BIND_FAILED: i32 = 3;
 pub const NAMESPACE_RESOLVE_FAILED: i32 = 4;
 pub const NAMESPACE_INTERNAL_ERROR: i32 = 5;
 
+pub const NAMESPACE_FILE_TYPE_REGULAR: i32 = 1;
+pub const NAMESPACE_FILE_TYPE_DIRECTORY: i32 = 2;
+pub const NAMESPACE_FILE_TYPE_SYMLINK: i32 = 3;
+
 bitflags! {
     #[derive(Debug, Clone, Copy)]
     pub struct MountFlags: u32 {

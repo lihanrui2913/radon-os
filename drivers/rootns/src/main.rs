@@ -2,16 +2,38 @@
 #![no_main]
 #![allow(unsafe_op_in_unsafe_fn)]
 
-use alloc::{collections::btree_map::BTreeMap, string::ToString, vec};
+use core::str::FromStr;
+
+use alloc::{
+    collections::btree_map::BTreeMap,
+    string::{String, ToString},
+    vec,
+};
 use block_protocol::protocol::BLOCK_IOCTL_GETSIZE;
-use deku::no_std_io::ErrorKind;
-use efs::{dev::Device, fs::ext2::Ext2Fs};
+use deku::no_std_io::{ErrorKind, Read, Seek};
+use efs::{
+    dev::Device,
+    fs::{
+        FilesystemRead,
+        ext2::{Ext2Fs, Ext2TypeWithFile},
+    },
+    path::Path,
+};
 use libdriver::{
-    Request, RequestHandler, Response, RpcClient, ServiceBuilder,
+    DriverOp, Request, RequestHandler, Response, RpcClient, ServiceBuilder,
     server::{ConnectionContext, RequestContext},
 };
-use libradon::{debug, error};
-use namespace::{client::NamespaceClient, protocol::MountFlags};
+use libradon::{
+    debug, error,
+    memory::{Vmo, VmoOptions},
+};
+use namespace::{
+    client::NamespaceClient,
+    protocol::{
+        MountFlags, NAMESPACE_FILE_TYPE_REGULAR, NAMESPACE_INTERNAL_ERROR,
+        NAMESPACE_INVALID_ARGUMENT, NAMESPACE_RESOLVE_FAILED,
+    },
+};
 use radon_kernel::{EINVAL, Error};
 
 extern crate alloc;
@@ -65,11 +87,125 @@ impl Device for Partition {
     }
 }
 
-pub struct RootNSRequestHandler(Ext2Fs<Partition>);
+pub struct RootNSRequestHandler {
+    inner: Ext2Fs<Partition>,
+}
 
 impl RequestHandler for RootNSRequestHandler {
     fn handle(&self, request: &Request, _ctx: &RequestContext) -> Response {
-        Response::error(request.header.request_id, 1)
+        let op = DriverOp::from(request.header.op);
+        match op {
+            DriverOp::Open => {
+                let string = match String::from_utf8(request.data.clone()) {
+                    Ok(s) => s,
+                    Err(_) => {
+                        return Response::error(
+                            request.header.request_id,
+                            NAMESPACE_INVALID_ARGUMENT,
+                        );
+                    }
+                };
+                let path = match Path::from_str(&string) {
+                    Ok(p) => p,
+                    Err(_) => {
+                        return Response::error(
+                            request.header.request_id,
+                            NAMESPACE_INVALID_ARGUMENT,
+                        );
+                    }
+                };
+                let file = match self.inner.get_file(
+                    &path,
+                    self.inner.root().expect("File system is broken"),
+                    true,
+                ) {
+                    Ok(f) => f,
+                    Err(_) => {
+                        return Response::error(
+                            request.header.request_id,
+                            NAMESPACE_RESOLVE_FAILED,
+                        );
+                    }
+                };
+                let (handle, file_ty) = match file {
+                    Ext2TypeWithFile::Regular(mut regular) => {
+                        if regular.size().0 == 0 {
+                            let mut vmo = match Vmo::create(
+                                4096usize,
+                                VmoOptions::COMMIT | VmoOptions::RESIZABLE,
+                            ) {
+                                Ok(v) => v,
+                                Err(_) => {
+                                    return Response::error(
+                                        request.header.request_id,
+                                        NAMESPACE_INTERNAL_ERROR,
+                                    );
+                                }
+                            };
+                            vmo.with_nodrop(true);
+                            (vmo.handle(), NAMESPACE_FILE_TYPE_REGULAR)
+                        } else {
+                            let mut vmo = match Vmo::create(
+                                (regular.size().0 as usize + 4095usize) & !4095usize,
+                                VmoOptions::COMMIT | VmoOptions::RESIZABLE,
+                            ) {
+                                Ok(v) => v,
+                                Err(_) => {
+                                    return Response::error(
+                                        request.header.request_id,
+                                        NAMESPACE_INTERNAL_ERROR,
+                                    );
+                                }
+                            };
+                            let mut offset = 0;
+                            let mut tmp = vec![0u8; 4096];
+                            while offset < regular.size().0 as usize {
+                                if let Err(_) =
+                                    regular.seek(deku::no_std_io::SeekFrom::Start(offset as u64))
+                                {
+                                    return Response::error(
+                                        request.header.request_id,
+                                        NAMESPACE_INTERNAL_ERROR,
+                                    );
+                                }
+                                if let Err(_) = regular.read(&mut tmp) {
+                                    return Response::error(
+                                        request.header.request_id,
+                                        NAMESPACE_INTERNAL_ERROR,
+                                    );
+                                }
+                                if let Err(_) = vmo.write(offset, &tmp) {
+                                    return Response::error(
+                                        request.header.request_id,
+                                        NAMESPACE_INTERNAL_ERROR,
+                                    );
+                                }
+                                offset += tmp.len();
+                            }
+                            vmo.with_nodrop(true);
+                            (vmo.handle(), NAMESPACE_FILE_TYPE_REGULAR)
+                        }
+                    }
+                    Ext2TypeWithFile::Directory(mut _directory) => {
+                        return Response::error(
+                            request.header.request_id,
+                            NAMESPACE_INTERNAL_ERROR,
+                        );
+                    }
+                    _ => {
+                        return Response::error(
+                            request.header.request_id,
+                            NAMESPACE_INTERNAL_ERROR,
+                        );
+                    }
+                };
+
+                Response::success(request.header.request_id)
+                    .with_data(file_ty.to_le_bytes().to_vec())
+                    .with_handles(vec![handle])
+            }
+            _ => Response::error(request.header.request_id, 1),
+        }
     }
 
     fn on_connect(&self, _ctx: &ConnectionContext) -> libdriver::Result<()> {
@@ -102,15 +238,15 @@ fn rootns_main() -> radon_kernel::Result<()> {
                     if let Ok(fs) = Ext2Fs::new(partition, 0) {
                         debug!("Found root file system at {}", driver_name);
 
-                        let rootns_service = ServiceBuilder::new(ROOTNS_DRIVER_SERVICE_NAME)
-                            .build(RootNSRequestHandler(fs))
-                            .map_err(|_| Error::new(EINVAL))?;
                         NamespaceClient::connect()?.bind(
                             "/",
                             ROOTNS_DRIVER_SERVICE_NAME,
                             MountFlags::all(),
                         )?;
 
+                        let rootns_service = ServiceBuilder::new(ROOTNS_DRIVER_SERVICE_NAME)
+                            .build(RootNSRequestHandler { inner: fs })
+                            .map_err(|_| Error::new(EINVAL))?;
                         rootns_service.run().map_err(|_| Error::new(EINVAL))?;
 
                         break 'out;
@@ -118,6 +254,8 @@ fn rootns_main() -> radon_kernel::Result<()> {
                 }
             }
         }
+
+        libradon::syscall::nanosleep(100_000_000)?;
     }
 
     Ok(())

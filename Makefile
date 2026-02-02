@@ -8,23 +8,27 @@ export KVM ?= 0
 all:
 	$(MAKE) -C nameserver
 	$(MAKE) -C drivers
+	$(MAKE) -C posix
 	$(MAKE) -C init
 	$(MAKE) -C kernel
 
 clippy:
 	$(MAKE) -C nameserver clippy
 	$(MAKE) -C drivers clippy
+	$(MAKE) -C posix clippy
 	$(MAKE) -C init clippy
 	$(MAKE) -C kernel clippy
 
 fmt:
 	$(MAKE) -C nameserver fmt
 	$(MAKE) -C drivers fmt
+	$(MAKE) -C posix fmt
 	$(MAKE) -C init fmt
 	$(MAKE) -C kernel fmt
 
 run:
 	$(MAKE) -C nameserver
 	$(MAKE) -C drivers
+	$(MAKE) -C posix
 	$(MAKE) -C init
 	$(MAKE) -C kernel run

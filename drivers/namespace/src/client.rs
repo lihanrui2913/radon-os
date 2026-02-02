@@ -20,7 +20,7 @@ impl NamespaceClient {
     pub fn bind(&self, path: &str, name: &str, flags: MountFlags) -> Result<()> {
         let mut buf = Vec::new();
         buf.extend_from_slice(&flags.bits().to_le_bytes());
-        buf.extend_from_slice(&path.len().to_le_bytes());
+        buf.extend_from_slice(&(path.len() as u32).to_le_bytes());
         buf.extend_from_slice(path.as_bytes());
         buf.extend_from_slice(name.as_bytes());
         self.client

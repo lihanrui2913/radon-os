@@ -1,4 +1,4 @@
-use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
+use alloc::{format, string::String, sync::Arc, vec};
 use gpt_disk_io::{
     BlockIo, DiskError,
     gpt_disk_types::{BlockSize, GptPartitionEntryArrayLayout, GptPartitionEntrySize, U32Le},

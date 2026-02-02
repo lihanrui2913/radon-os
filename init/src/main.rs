@@ -96,17 +96,20 @@ static ROOTNS_ELF: &'static [u8] = include_bytes!("../../drivers/rootns/build/ro
 
 /// 启动核心服务
 fn start_core_services(bootstrap: &BootstrapHandler) -> Result<(), InitError> {
-    start_service(bootstrap, "acpi", ACPI_ELF, false)?;
-    start_service(bootstrap, "pci", PCI_ELF, false)?;
-    start_service(bootstrap, "nvme", NVME_ELF, false)?;
-    start_service(bootstrap, "ahci", AHCI_ELF, false)?;
-    start_service(bootstrap, "namespace", NAMESPACE_ELF, false)?;
-    start_service(bootstrap, "rootns", ROOTNS_ELF, false)?;
+    start_service(bootstrap, "acpi", ACPI_ELF, true)?;
+    start_service(bootstrap, "pci", PCI_ELF, true)?;
+    start_service(bootstrap, "nvme", NVME_ELF, true)?;
+    start_service(bootstrap, "ahci", AHCI_ELF, true)?;
+    start_service(bootstrap, "namespace", NAMESPACE_ELF, true)?;
+    start_service(bootstrap, "rootns", ROOTNS_ELF, true)?;
     Ok(())
 }
 
+static POSIX_ELF: &'static [u8] = include_bytes!("../../posix/build/posix.elf");
+
 /// 启动用户服务
-fn start_user_services(_bootstrap: &BootstrapHandler) -> Result<(), InitError> {
+fn start_user_services(bootstrap: &BootstrapHandler) -> Result<(), InitError> {
+    start_service(bootstrap, "posix", POSIX_ELF, false)?;
     Ok(())
 }
 
