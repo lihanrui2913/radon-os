@@ -1,12 +1,12 @@
 use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
 use gpt_disk_io::{
-    gpt_disk_types::{BlockSize, GptPartitionEntryArrayLayout, GptPartitionEntrySize},
     BlockIo, DiskError,
+    gpt_disk_types::{BlockSize, GptPartitionEntryArrayLayout, GptPartitionEntrySize, U32Le},
 };
 use libdriver::{
-    protocol::IoRequest,
-    server::{ConnectionContext, RequestContext},
     DriverOp, Request, RequestHandler, Response,
+    protocol::{IoRequest, IoctlRequest},
+    server::{ConnectionContext, RequestContext},
 };
 use radon_kernel::Result;
 
@@ -18,6 +18,8 @@ pub trait BlockDevice {
     fn write_block(&self, start_byte: u64, buf: &[u8]) -> Result<()>;
     fn size(&self) -> usize;
 }
+
+pub const BLOCK_IOCTL_GETSIZE: u32 = 1;
 
 #[derive(Clone)]
 pub struct PartitionDevice {
@@ -35,7 +37,7 @@ impl RequestHandler for PartitionDevice {
             DriverOp::Read => {
                 let io_request =
                     unsafe { (request.data.as_ptr() as *const IoRequest).as_ref() }.unwrap();
-                let mut buf = Vec::with_capacity(io_request.length as usize);
+                let mut buf = vec![0u8; io_request.length as usize];
                 if let Err(_) = self.read_block(io_request.offset, &mut buf) {
                     Response::error(request.header.request_id, BLOCK_ERR_IO)
                 } else {
@@ -56,6 +58,15 @@ impl RequestHandler for PartitionDevice {
                 } else {
                     Response::success(request.header.request_id)
                         .with_data((io_request.length).to_le_bytes().to_vec())
+                }
+            }
+            DriverOp::Ioctl => {
+                let ioctl_request =
+                    unsafe { (request.data.as_ptr() as *const IoctlRequest).as_ref() }.unwrap();
+                match ioctl_request.cmd {
+                    BLOCK_IOCTL_GETSIZE => Response::success(request.header.request_id)
+                        .with_data(u64::try_from(self.size()).unwrap().to_le_bytes().to_vec()),
+                    _ => Response::error(request.header.request_id, 1),
                 }
             }
             // TODO: GetBuffer & ReleaseBuffer
@@ -127,16 +138,18 @@ pub fn probe_parititons(
 
     let mut buf = vec![0u8; 512 * 8 * 100];
     if let Ok(header) = disk.read_primary_gpt_header(&mut buf) {
-        if let Ok(part_iter) = disk.gpt_partition_entry_array_iter(
-            GptPartitionEntryArrayLayout {
-                start_lba: header.partition_entry_lba.into(),
-                entry_size: GptPartitionEntrySize::new(header.size_of_partition_entry.to_u32())
-                    .ok()
-                    .ok_or(DiskError::Io(0))?,
-                num_entries: header.number_of_partition_entries.to_u32(),
-            },
-            &mut buf,
-        ) {
+        if (header.number_of_partition_entries != U32Le::from_u32(0))
+            && let Ok(part_iter) = disk.gpt_partition_entry_array_iter(
+                GptPartitionEntryArrayLayout {
+                    start_lba: header.partition_entry_lba.into(),
+                    entry_size: GptPartitionEntrySize::new(header.size_of_partition_entry.to_u32())
+                        .ok()
+                        .ok_or(DiskError::Io(0))?,
+                    num_entries: header.number_of_partition_entries.to_u32(),
+                },
+                &mut buf,
+            )
+        {
             for (id, part) in part_iter.enumerate() {
                 if let Ok(part) = part {
                     if !part.is_used() {
@@ -145,7 +158,7 @@ pub fn probe_parititons(
                     let partdev = PartitionDevice {
                         inner: block_dev.clone(),
                         offset: part.starting_lba.to_u64() * 512,
-                        size: (part.ending_lba.to_u64() - part.starting_lba.to_u64()) as usize
+                        size: (part.ending_lba.to_u64() - part.starting_lba.to_u64() + 1) as usize
                             * 512,
                     };
                     f(format!("{}part{}", prefix, id), partdev);

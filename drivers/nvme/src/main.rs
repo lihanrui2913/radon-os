@@ -10,7 +10,7 @@ use libdriver::{
     protocol::IoRequest,
     server::{ConnectionContext, RequestContext},
 };
-use libradon::{error, info};
+use libradon::{debug, error, info};
 use pcid::protocol::{PciDeviceInfo, PciGetDeviceInfoRequest};
 use radon_kernel::{EINVAL, ENOENT, EOPNOTSUPP, Error, Result};
 use spin::Mutex;
@@ -247,9 +247,9 @@ fn nvme_main() -> radon_kernel::Result<()> {
         });
     }
 
-    for service in NVME_SERVICES.lock().iter() {
-        service.run_once().map_err(|_| Error::new(EINVAL))?;
+    loop {
+        for service in NVME_SERVICES.lock().iter() {
+            service.run_once().map_err(|_| Error::new(EINVAL))?;
+        }
     }
-
-    Ok(())
 }

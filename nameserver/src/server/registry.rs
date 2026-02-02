@@ -133,15 +133,14 @@ impl ServiceRegistry {
     }
 
     /// 列出服务
-    pub fn list(&self, prefix: &str, offset: usize, limit: usize) -> Vec<Arc<RegisteredService>> {
+    pub fn list(&self, contain_name: &str, limit: usize) -> Vec<Arc<RegisteredService>> {
         let by_name = self.by_name.read();
 
         by_name
             .iter()
             .filter(|(name, service)| {
-                name.starts_with(prefix) && !service.flags.contains(ServiceFlags::HIDDEN)
+                name.contains(contain_name) && !service.flags.contains(ServiceFlags::HIDDEN)
             })
-            .skip(offset)
             .take(limit)
             .map(|(_, service)| service.clone())
             .collect()

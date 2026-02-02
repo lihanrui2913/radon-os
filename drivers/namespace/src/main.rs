@@ -78,8 +78,8 @@ impl RequestHandler for NamespaceServiceHandler {
                     let path_len =
                         unsafe { (request.data[4..8].as_ptr() as *const u32).read_unaligned() }
                             as usize;
-                    if let Ok(path) = str::from_utf8(&request.data[8..path_len])
-                        && let Ok(name) = str::from_utf8(&request.data[path_len..])
+                    if let Ok(path) = str::from_utf8(&request.data[8..(8 + path_len)])
+                        && let Ok(name) = str::from_utf8(&request.data[(8 + path_len)..])
                     {
                         if let Ok(_) = self.0.bind(
                             path,

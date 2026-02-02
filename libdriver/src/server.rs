@@ -110,17 +110,17 @@ impl DriverServer {
     pub fn run_once(&self) -> Result<()> {
         let mut packets = [PortPacket::zeroed(); 32];
 
-        let count = self.port.wait(&mut packets, Deadline::Infinite)?;
+        if let Ok(count) = self.port.try_wait(&mut packets) {
+            for i in 0..count {
+                let packet = &packets[i];
 
-        for i in 0..count {
-            let packet = &packets[i];
-
-            if packet.key == 0 {
-                // 接受连接请求
-                self.handle_accept()?;
-            } else {
-                // 客户端消息
-                self.handle_client_event(packet.key, packet.signals)?;
+                if packet.key == 0 {
+                    // 接受连接请求
+                    self.handle_accept()?;
+                } else {
+                    // 客户端消息
+                    self.handle_client_event(packet.key, packet.signals)?;
+                }
             }
         }
 

@@ -304,15 +304,11 @@ pub struct ServiceInfo {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct ListRequest {
-    /// 起始索引
-    pub offset: u32,
     /// 最大数量
     pub limit: u32,
     /// 过滤器：前缀长度
-    pub prefix_len: u32,
-    /// 保留
-    pub reserved: u32,
-    // 后跟: prefix bytes (可选)
+    pub contain_name_len: u32,
+    // 后跟: contain_name bytes (可选)
 }
 
 /// 列表响应

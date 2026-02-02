@@ -6,16 +6,11 @@ extern crate alloc;
 pub mod elf;
 pub mod program;
 
-use core::sync::atomic::{AtomicBool, Ordering};
-
 use libradon::{error, info, process::Process};
 
 use bootstrap::BootstrapHandler;
 
 use crate::program::ProgramLoader;
-
-/// 全局运行标志
-static RUNNING: AtomicBool = AtomicBool::new(true);
 
 /// Init 进程主入口
 #[unsafe(no_mangle)]
@@ -149,16 +144,8 @@ fn start_service(
 
 /// 运行事件循环
 fn run_event_loop(bootstrap: &BootstrapHandler) -> Result<(), InitError> {
-    while RUNNING.load(Ordering::Relaxed) {
-        // 处理 bootstrap 请求
-        bootstrap.poll().map_err(|_| InitError::BootstrapFailed)?;
-
-        // 处理其他事件
-        // ...
-
-        // 让出 CPU
-        libradon::process::yield_now();
-    }
+    // 处理 bootstrap 请求
+    bootstrap.run().map_err(|_| InitError::BootstrapFailed)?;
 
     Ok(())
 }

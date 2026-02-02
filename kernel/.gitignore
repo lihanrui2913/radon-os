@@ -4,6 +4,7 @@
 /limine
 /target
 /initramfs-*
+/rootfs-*
 /*.elf
 /*.img
 /*.dtb

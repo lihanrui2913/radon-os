@@ -15,7 +15,7 @@ export BUILD = $(SOURCE)/build
 .PHONY: $(BUILD)/pci-$(ARCH).elf
 $(BUILD)/pci-$(ARCH).elf:
 	mkdir -p $(BUILD)
-	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET) -Zbuild-std-features=compiler-builtins-mem
+	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET)
 	cp target/$(RUST_TARGET)/$(RUST_PROFILE_SUBDIR)/pcid $(BUILD)/pci-$(ARCH).elf
 	cp $(BUILD)/pci-$(ARCH).elf $(BUILD)/pci.elf
 

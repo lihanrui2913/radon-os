@@ -11,16 +11,17 @@ pub struct NamespaceClient {
 
 impl NamespaceClient {
     pub fn connect() -> Result<Self> {
-        let client = libdriver::client::DriverClient::connect("nameserver")
+        let client = libdriver::client::DriverClient::connect("namespace")
             .map_err(|_| Error::new(ENOENT))?;
 
         Ok(Self { client })
     }
 
-    pub fn bind(&self, name: &str, flags: MountFlags) -> Result<()> {
+    pub fn bind(&self, path: &str, name: &str, flags: MountFlags) -> Result<()> {
         let mut buf = Vec::new();
         buf.extend_from_slice(&flags.bits().to_le_bytes());
-        buf.extend_from_slice(&name.len().to_le_bytes());
+        buf.extend_from_slice(&path.len().to_le_bytes());
+        buf.extend_from_slice(path.as_bytes());
         buf.extend_from_slice(name.as_bytes());
         self.client
             .call(DriverOp::UserDefined, &buf)

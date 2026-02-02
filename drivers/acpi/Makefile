@@ -15,7 +15,7 @@ export BUILD = $(SOURCE)/build
 .PHONY: $(BUILD)/acpi-$(ARCH).elf
 $(BUILD)/acpi-$(ARCH).elf:
 	mkdir -p $(BUILD)
-	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET) -Zbuild-std-features=compiler-builtins-mem
+	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET)
 	cp target/$(RUST_TARGET)/$(RUST_PROFILE_SUBDIR)/acpid $(BUILD)/acpi-$(ARCH).elf
 	cp $(BUILD)/acpi-$(ARCH).elf $(BUILD)/acpi.elf
 

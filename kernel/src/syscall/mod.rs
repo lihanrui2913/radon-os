@@ -57,6 +57,7 @@ pub extern "C" fn syscall_handler(regs: *mut Ptrace) {
         SYS_CHANNEL_TRY_RECV => object::sys_channel_try_recv(arg1, arg2, arg3, arg4, arg5, arg6),
 
         SYS_CLOCK_GET => clock::sys_clock_get(),
+        SYS_NANOSLEEP => clock::sys_nanosleep(arg1),
 
         SYS_PROCESS_CREATE => process::sys_process_create(arg1, arg2),
         SYS_PROCESS_START => process::sys_process_start(arg1),

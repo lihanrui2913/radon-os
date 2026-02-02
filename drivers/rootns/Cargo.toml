@@ -5,8 +5,12 @@ edition = "2024"
 
 [dependencies]
 bitflags = "2.10.0"
+block_protocol = { path = "../block_protocol" }
+deku = { version = "0.20", default-features = false, features = ["alloc"] }
+efs = { path = "crates/efs", features = ["ext2"] }
 libdriver = { path = "../../libdriver" }
 libradon = { path = "../../libradon" }
+nameserver = { path = "../../nameserver" }
 namespace = { path = "../namespace" }
 radon_kernel = { path = "../../kernel" }
 spin = "0.10.0"

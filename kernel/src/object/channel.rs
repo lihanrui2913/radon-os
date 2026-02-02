@@ -1,5 +1,3 @@
-// kernel/src/object/channel.rs
-
 use alloc::collections::VecDeque;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;

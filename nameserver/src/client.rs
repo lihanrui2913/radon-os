@@ -214,12 +214,12 @@ impl NameService {
     }
 
     /// 查找服务
-    pub fn lookup(&self, name: &str) -> Result<ServiceInfo> {
+    pub fn lookup(&self, name: &str) -> Result<(ServiceInfo, String)> {
         self.lookup_timeout(name, 0)
     }
 
     /// 带超时查找服务
-    pub fn lookup_timeout(&self, name: &str, timeout_ms: u32) -> Result<ServiceInfo> {
+    pub fn lookup_timeout(&self, name: &str, timeout_ms: u32) -> Result<(ServiceInfo, String)> {
         if name.len() > MAX_SERVICE_NAME_LEN {
             return Err(Error::NameTooLong);
         }
@@ -301,24 +301,26 @@ impl NameService {
     }
 
     /// 列出服务
-    pub fn list(&self, prefix: Option<&str>, offset: u32, limit: u32) -> Result<Vec<ServiceInfo>> {
-        let prefix = prefix.unwrap_or("");
+    pub fn list(
+        &self,
+        contain_name: Option<&str>,
+        limit: u32,
+    ) -> Result<(Vec<ServiceInfo>, Vec<String>)> {
+        let contain_name = contain_name.unwrap_or("");
 
         let req = ListRequest {
-            offset,
             limit,
-            prefix_len: prefix.len() as u32,
-            reserved: 0,
+            contain_name_len: contain_name.len() as u32,
         };
 
-        let mut data = Vec::with_capacity(core::mem::size_of::<ListRequest>() + prefix.len());
+        let mut data = Vec::with_capacity(core::mem::size_of::<ListRequest>() + contain_name.len());
         data.extend_from_slice(unsafe {
             core::slice::from_raw_parts(
                 &req as *const _ as *const u8,
                 core::mem::size_of::<ListRequest>(),
             )
         });
-        data.extend_from_slice(prefix.as_bytes());
+        data.extend_from_slice(contain_name.as_bytes());
 
         let (_, resp_data, _) = self.request(OpCode::List, &data, &[], Deadline::Infinite)?;
 
@@ -403,15 +405,24 @@ impl NameService {
         }
     }
 
-    fn parse_service_info(data: &[u8]) -> Result<ServiceInfo> {
+    fn parse_service_info(data: &[u8]) -> Result<(ServiceInfo, String)> {
         if data.len() < core::mem::size_of::<ServiceInfo>() {
             return Err(Error::InvalidArgument);
         }
 
-        Ok(unsafe { core::ptr::read_unaligned(data.as_ptr() as *const ServiceInfo) })
+        let info = unsafe { core::ptr::read_unaligned(data.as_ptr() as *const ServiceInfo) };
+        let name_base = core::mem::size_of::<ServiceInfo>();
+        let name = if info.name_len > 0 && data.len() >= name_base + info.name_len as usize {
+            String::from_utf8(data[name_base..(name_base + info.name_len as usize)].to_vec())
+                .map_err(|_| Error::InvalidArgument)?
+        } else {
+            String::new()
+        };
+
+        Ok((info, name))
     }
 
-    fn parse_service_list(data: &[u8]) -> Result<Vec<ServiceInfo>> {
+    fn parse_service_list(data: &[u8]) -> Result<(Vec<ServiceInfo>, Vec<String>)> {
         if data.len() < core::mem::size_of::<ListResponse>() {
             return Err(Error::InvalidArgument);
         }
@@ -419,6 +430,7 @@ impl NameService {
         let resp: ListResponse = unsafe { (data.as_ptr() as *const ListResponse).read_unaligned() };
 
         let mut services = Vec::with_capacity(resp.returned_count as usize);
+        let mut names = Vec::with_capacity(resp.returned_count as usize);
         let mut offset = core::mem::size_of::<ListResponse>();
 
         for _ in 0..resp.returned_count {
@@ -430,14 +442,23 @@ impl NameService {
                 core::ptr::read_unaligned((data.as_ptr() as usize + offset) as *const ServiceInfo)
             };
 
+            let name_base = offset + core::mem::size_of::<ServiceInfo>();
+            let name = if info.name_len > 0 && data.len() >= name_base + info.name_len as usize {
+                String::from_utf8(data[name_base..(name_base + info.name_len as usize)].to_vec())
+                    .map_err(|_| Error::InvalidArgument)?
+            } else {
+                String::new()
+            };
+
             offset += core::mem::size_of::<ServiceInfo>()
                 + info.name_len as usize
                 + info.desc_len as usize;
 
             services.push(info);
+            names.push(name);
         }
 
-        Ok(services)
+        Ok((services, names))
     }
 
     fn parse_notification(header: &MessageHeader, data: &[u8]) -> Result<Notification> {
@@ -515,5 +536,11 @@ pub fn register(name: &str, channel: &Channel) -> Result<ServiceHandle> {
 /// 查找服务（便捷函数）
 pub fn lookup(name: &str) -> Result<ServiceInfo> {
     let ns = NameService::connect()?;
-    ns.lookup(name)
+    ns.lookup(name).map(|(info, _name)| info)
+}
+
+/// 列出服务（便捷函数）
+pub fn list(contain_name: Option<&str>, limit: u32) -> Result<(Vec<ServiceInfo>, Vec<String>)> {
+    let ns = NameService::connect()?;
+    ns.list(contain_name, limit)
 }

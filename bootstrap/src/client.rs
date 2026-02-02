@@ -100,16 +100,6 @@ impl BootstrapClient {
         self.get_service(services::NAMESERVER)
     }
 
-    /// 获取块设备服务
-    pub fn get_blockserver(&self) -> Result<Channel> {
-        self.get_service(services::BLOCKSERVER)
-    }
-
-    /// 获取文件系统服务
-    pub fn get_fsserver(&self) -> Result<Channel> {
-        self.get_service(services::FSSERVER)
-    }
-
     /// 注册为服务提供者（仅限特权进程）
     pub fn register_provider(&self, name: &str, channel: &Channel) -> Result<()> {
         if name.len() > MAX_SERVICE_NAME {

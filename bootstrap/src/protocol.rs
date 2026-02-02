@@ -175,8 +175,4 @@ impl BootstrapResponse {
 pub mod services {
     /// Name Server
     pub const NAMESERVER: &str = "NAMESERVER";
-    /// 块设备驱动系统
-    pub const BLOCKSERVER: &str = "BLOCKSERVER";
-    /// 文件系统
-    pub const FSSERVER: &str = "FSSERVER";
 }

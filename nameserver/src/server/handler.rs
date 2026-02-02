@@ -328,18 +328,16 @@ impl RequestHandler {
 
         let req: ListRequest = unsafe { (data.as_ptr() as *const ListRequest).read_unaligned() };
 
-        let prefix_start = core::mem::size_of::<ListRequest>();
-        let prefix_end = prefix_start + req.prefix_len as usize;
+        let contain_name_len_start = core::mem::size_of::<ListRequest>();
+        let contain_name_len_end = contain_name_len_start + req.contain_name_len as usize;
 
-        let prefix = if req.prefix_len > 0 && data.len() >= prefix_end {
-            core::str::from_utf8(&data[prefix_start..prefix_end]).unwrap_or("")
+        let contain_name = if req.contain_name_len > 0 && data.len() >= contain_name_len_end {
+            core::str::from_utf8(&data[contain_name_len_start..contain_name_len_end]).unwrap_or("")
         } else {
             ""
         };
 
-        let services = self
-            .registry
-            .list(prefix, req.offset as usize, req.limit as usize);
+        let services = self.registry.list(contain_name, req.limit as usize);
         let total = self.registry.count();
 
         // 构造响应

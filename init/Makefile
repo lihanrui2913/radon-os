@@ -15,7 +15,7 @@ export BUILD = $(SOURCE)/build
 .PHONY: $(BUILD)/init-$(ARCH).elf
 $(BUILD)/init-$(ARCH).elf:
 	mkdir -p $(BUILD)
-	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET) -Zbuild-std-features=compiler-builtins-mem
+	RUSTFLAGS="-C relocation-model=static" cargo build --profile $(RUST_PROFILE) --target $(RUST_TARGET)
 	cp target/$(RUST_TARGET)/$(RUST_PROFILE_SUBDIR)/init $(BUILD)/init-$(ARCH).elf
 
 clippy:
