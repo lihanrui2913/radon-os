@@ -1,12 +1,8 @@
-use alloc::sync::Arc;
-#[cfg(target_arch = "x86_64")]
-use x86_64::{VirtAddr, registers::model_specific::FsBase};
-
 use crate::{
     ENOENT, ESRCH, Error, Result,
     arch::Ptrace,
     drivers::acpi::RSDP_REQUEST,
-    task::{TASKS, block_task, get_current_task, unblock_task},
+    task::{TASKS, block_task, unblock_task},
 };
 
 pub fn get_rsdp() -> Result<usize> {
@@ -35,12 +31,9 @@ pub fn set_fsbase(tid: usize, fsbase: usize) -> Result<usize> {
         .find(|t| t.read().tid() == tid)
         .ok_or(Error::new(ESRCH))?;
 
+    block_task(task.clone());
     task.write().arch_context.fsbase = fsbase;
-
-    let current = get_current_task().unwrap();
-    if Arc::ptr_eq(task, &current) {
-        FsBase::write(VirtAddr::new(fsbase as u64));
-    }
+    unblock_task(task.clone());
 
     Ok(0)
 }

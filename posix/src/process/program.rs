@@ -34,6 +34,7 @@ pub struct LoadedProgram {
     pub phnum: usize,
     /// 入口点
     pub entry: usize,
+    pub interp_entry: Option<usize>,
     /// 栈顶
     pub stack_top: usize,
     /// 栈 vmo
@@ -64,38 +65,6 @@ impl ProgramLoader {
             .get_vmar_handle()
             .map_err(|_| LoaderError::OutOfMemory)?;
 
-        if let Some(interp_path) = elf.interpreter() {
-            let (vmo, _) =
-                open_inner(interp_path.to_string()).map_err(|_| LoaderError::SyscallError)?;
-
-            let interp_buf = vec![0u8; vmo.size().map_err(|_| LoaderError::SyscallError)?];
-
-            let interp_elf = ElfParser::parse(&interp_buf)?;
-
-            // 加载所有段
-            for segment in interp_elf.load_segments() {
-                let vaddr = INTERP_LOAD_BASE + segment.vaddr;
-                let aligned_vaddr = vaddr & !4095usize;
-                let offset = vaddr - aligned_vaddr;
-                let memsz = segment.memsz;
-                let size = ((vaddr + memsz + 4095) & !4095usize) - aligned_vaddr;
-
-                let vmo =
-                    Vmo::create(size, VmoOptions::COMMIT).map_err(|_| LoaderError::OutOfMemory)?;
-                vmo.write(offset, segment.data.unwrap())
-                    .map_err(|_| LoaderError::OutOfMemory)?;
-                map_vmo_at_in_vmar(
-                    vmar_handle,
-                    &vmo,
-                    offset,
-                    size,
-                    MappingFlags::READ | MappingFlags::WRITE | MappingFlags::EXECUTE,
-                    aligned_vaddr as *mut u8,
-                )
-                .map_err(|_| LoaderError::OutOfMemory)?;
-            }
-        }
-
         // 加载所有段
         for segment in elf.load_segments() {
             let vaddr = base_address + segment.vaddr;
@@ -104,8 +73,9 @@ impl ProgramLoader {
             let memsz = segment.memsz;
             let size = ((vaddr + memsz + 4095) & !4095usize) - aligned_vaddr;
 
-            let vmo =
+            let mut vmo =
                 Vmo::create(size, VmoOptions::COMMIT).map_err(|_| LoaderError::OutOfMemory)?;
+            vmo.with_nodrop(true);
             vmo.write(offset, segment.data.unwrap())
                 .map_err(|_| LoaderError::OutOfMemory)?;
             map_vmo_at_in_vmar(
@@ -122,8 +92,9 @@ impl ProgramLoader {
         // 分配栈
         let aligned_size = layout::DEFAULT_STACK_SIZE;
         let stack_bottom = layout::STACK_TOP - aligned_size;
-        let vmo =
+        let mut vmo =
             Vmo::create(aligned_size, VmoOptions::COMMIT).map_err(|_| LoaderError::OutOfMemory)?;
+        vmo.with_nodrop(true);
         map_vmo_at_in_vmar(
             vmar_handle,
             &vmo,
@@ -136,12 +107,59 @@ impl ProgramLoader {
 
         // 计算入口点
         let entry = base_address + elf.entry_point() as usize;
+        let mut interp_entry = None;
+
+        if let Some(interp_path) = elf.interpreter() {
+            let (vmo, _) =
+                open_inner(interp_path.to_string()).map_err(|_| LoaderError::SyscallError)?;
+
+            let interp_buf = vec![0u8; vmo.size().map_err(|_| LoaderError::SyscallError)?];
+
+            let interp_elf = ElfParser::parse(&interp_buf)?;
+
+            // 加载所有段
+            for segment in interp_elf.load_segments() {
+                let vaddr = INTERP_LOAD_BASE + segment.vaddr;
+                let aligned_vaddr = vaddr & !4095usize;
+                let offset = vaddr - aligned_vaddr;
+                let memsz = segment.memsz;
+                let size = ((vaddr + memsz + 4095) & !4095usize) - aligned_vaddr;
+
+                let mut vmo =
+                    Vmo::create(size, VmoOptions::COMMIT).map_err(|_| LoaderError::OutOfMemory)?;
+                vmo.with_nodrop(true);
+                vmo.write(offset, segment.data.unwrap())
+                    .map_err(|_| LoaderError::OutOfMemory)?;
+                map_vmo_at_in_vmar(
+                    vmar_handle,
+                    &vmo,
+                    offset,
+                    size,
+                    MappingFlags::READ | MappingFlags::WRITE | MappingFlags::EXECUTE,
+                    aligned_vaddr as *mut u8,
+                )
+                .map_err(|_| LoaderError::OutOfMemory)?;
+            }
+
+            interp_entry = Some(INTERP_LOAD_BASE + interp_elf.entry_point() as usize);
+        }
+
+        let _ = vmar_handle.close();
+
+        let mut phnum = 0;
+        for _ in elf.program_headers() {
+            phnum += 1
+        }
 
         Ok(LoadedProgram {
-            phdr_vaddr: elf.phdr_segments().map(|s| s.vaddr as usize).unwrap_or(0),
+            phdr_vaddr: elf
+                .phdr_segments()
+                .map(|s| base_address + s.vaddr as usize)
+                .unwrap_or(0),
             phent_size: size_of::<Elf64ProgramHeader>(),
-            phnum: elf.phdr_segments().iter().len(),
+            phnum,
             entry,
+            interp_entry,
             stack_top: layout::STACK_TOP,
             stack_vmo: vmo,
             interp_base: INTERP_LOAD_BASE,

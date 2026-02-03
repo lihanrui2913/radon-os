@@ -181,6 +181,10 @@ impl IrqRegsArch for Ptrace {
         self.cs = code.0 as u64;
         self.ss = data.0 as u64;
     }
+
+    fn to_bytes(&self) -> &[u8] {
+        unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, size_of::<Self>()) }
+    }
 }
 
 pub struct X8664IrqArch;

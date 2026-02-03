@@ -62,8 +62,9 @@ impl ProgramLoader {
             let memsz = segment.memsz;
             let size = ((vaddr + memsz + 4095) & !4095usize) - aligned_vaddr;
 
-            let vmo =
+            let mut vmo =
                 Vmo::create(size, VmoOptions::COMMIT).map_err(|_| LoaderError::OutOfMemory)?;
+            vmo.with_nodrop(true);
             vmo.write(offset, segment.data.unwrap())
                 .map_err(|_| LoaderError::OutOfMemory)?;
             map_vmo_at_in_vmar(
@@ -80,8 +81,9 @@ impl ProgramLoader {
         // 分配栈
         let aligned_size = layout::DEFAULT_STACK_SIZE;
         let stack_bottom = layout::STACK_TOP - aligned_size;
-        let vmo =
+        let mut vmo =
             Vmo::create(aligned_size, VmoOptions::COMMIT).map_err(|_| LoaderError::OutOfMemory)?;
+        vmo.with_nodrop(true);
         map_vmo_at_in_vmar(
             vmar_handle,
             &vmo,
@@ -94,6 +96,8 @@ impl ProgramLoader {
 
         // 计算入口点
         let entry = base_address + elf.entry_point() as usize;
+
+        let _ = vmar_handle.close();
 
         Ok(LoadedProgram {
             entry,

@@ -6,7 +6,7 @@ extern crate alloc;
 use alloc::string::ToString;
 use libradon::error;
 
-use crate::process::PosixProcess;
+use crate::process::PROCESS_MANAGER;
 
 mod fs;
 mod process;
@@ -30,11 +30,12 @@ pub extern "C" fn _start() -> ! {
 
 fn posix_main() -> radon_kernel::Result<()> {
     while nameserver::client::lookup("driver.rootns").is_err() {
-        libradon::syscall::nanosleep(100_000_000)?;
+        libradon::syscall::nanosleep(1000_000_000)?;
     }
 
-    let _init_process =
-        PosixProcess::new("/sbin/init".to_string(), &[], &[]).expect("Failed to start posix init");
+    PROCESS_MANAGER
+        .create("/sbin/init".to_string(), &[], &[])
+        .expect("Failed to start posix init");
 
-    Ok(())
+    PROCESS_MANAGER.run()
 }

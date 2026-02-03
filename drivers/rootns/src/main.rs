@@ -2,12 +2,13 @@
 #![no_main]
 #![allow(unsafe_op_in_unsafe_fn)]
 
-use core::str::FromStr;
+use core::{mem::offset_of, str::FromStr};
 
 use alloc::{
     collections::btree_map::BTreeMap,
     string::{String, ToString},
     vec,
+    vec::Vec,
 };
 use block_protocol::protocol::BLOCK_IOCTL_GETSIZE;
 use deku::no_std_io::{ErrorKind, Read, Seek};
@@ -16,6 +17,7 @@ use efs::{
     fs::{
         FilesystemRead,
         ext2::{Ext2Fs, Ext2TypeWithFile},
+        file::DirectoryRead,
     },
     path::Path,
 };
@@ -30,8 +32,9 @@ use libradon::{
 use namespace::{
     client::NamespaceClient,
     protocol::{
-        MountFlags, NAMESPACE_FILE_TYPE_REGULAR, NAMESPACE_INTERNAL_ERROR,
-        NAMESPACE_INVALID_ARGUMENT, NAMESPACE_RESOLVE_FAILED,
+        MountFlags, NAMESPACE_FILE_TYPE_DIRECTORY, NAMESPACE_FILE_TYPE_REGULAR,
+        NAMESPACE_FILE_TYPE_SYMLINK, NAMESPACE_FILE_TYPE_UNKNOWN, NAMESPACE_INTERNAL_ERROR,
+        NAMESPACE_INVALID_ARGUMENT, NAMESPACE_RESOLVE_FAILED, NsDirEntry,
     },
 };
 use radon_kernel::{EINVAL, Error};
@@ -186,11 +189,65 @@ impl RequestHandler for RootNSRequestHandler {
                             (vmo.handle(), NAMESPACE_FILE_TYPE_REGULAR)
                         }
                     }
-                    Ext2TypeWithFile::Directory(mut _directory) => {
-                        return Response::error(
-                            request.header.request_id,
-                            NAMESPACE_INTERNAL_ERROR,
-                        );
+                    Ext2TypeWithFile::Directory(directory) => {
+                        let mut dentries = Vec::new();
+
+                        let entries = match directory.entries() {
+                            Ok(e) => e,
+                            Err(_) => {
+                                return Response::error(
+                                    request.header.request_id,
+                                    NAMESPACE_INTERNAL_ERROR,
+                                );
+                            }
+                        };
+
+                        for entry in entries.iter() {
+                            let dentry_len = offset_of!(NsDirEntry, name) + entry.filename.len();
+                            let mut dentry = Vec::with_capacity(dentry_len);
+                            let file_type = if entry.file.is_directory() {
+                                NAMESPACE_FILE_TYPE_DIRECTORY
+                            } else if entry.file.is_regular() {
+                                NAMESPACE_FILE_TYPE_REGULAR
+                            } else if entry.file.is_symlink() {
+                                NAMESPACE_FILE_TYPE_SYMLINK
+                            } else {
+                                NAMESPACE_FILE_TYPE_UNKNOWN
+                            };
+                            dentry.extend_from_slice(
+                                NsDirEntry {
+                                    rec_len: dentry_len,
+                                    name_len: entry.filename.len(),
+                                    file_type,
+                                    name: [0u8; 256],
+                                }
+                                .to_bytes(),
+                            );
+                            dentry.extend_from_slice(entry.filename.as_bytes());
+
+                            dentries.extend_from_slice(&dentry);
+                        }
+
+                        let mut vmo = match Vmo::create(
+                            (dentries.len() + 4095usize) & !4095usize,
+                            VmoOptions::COMMIT | VmoOptions::RESIZABLE,
+                        ) {
+                            Ok(v) => v,
+                            Err(_) => {
+                                return Response::error(
+                                    request.header.request_id,
+                                    NAMESPACE_INTERNAL_ERROR,
+                                );
+                            }
+                        };
+                        if let Err(_) = vmo.write(0, &dentries) {
+                            return Response::error(
+                                request.header.request_id,
+                                NAMESPACE_INTERNAL_ERROR,
+                            );
+                        }
+                        vmo.with_nodrop(true);
+                        (vmo.handle(), NAMESPACE_FILE_TYPE_DIRECTORY)
                     }
                     _ => {
                         return Response::error(
@@ -255,7 +312,7 @@ fn rootns_main() -> radon_kernel::Result<()> {
             }
         }
 
-        libradon::syscall::nanosleep(100_000_000)?;
+        libradon::syscall::nanosleep(1000_000_000)?;
     }
 
     Ok(())

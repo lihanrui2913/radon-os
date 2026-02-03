@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 bitflags = "2.10.0"
 libdriver = { path = "../libdriver" }
+libposix = { path = "../libposix" }
 libradon = { path = "../libradon" }
 nameserver = { path = "../nameserver", features = ["client"] }
 namespace = { path = "../drivers/namespace" }

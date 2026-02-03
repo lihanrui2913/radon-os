@@ -29,7 +29,7 @@ impl DriverClient {
     pub fn connect(service_name: &str) -> Result<Self> {
         let name = format!("driver.{}", service_name);
         while nameserver::client::lookup(&name).is_err() {
-            libradon::syscall::nanosleep(100_000_000)?;
+            libradon::syscall::nanosleep(1000_000_000)?;
         }
 
         let service_channel = nameserver::client::connect(&name).map_err(|e| Error::from(e))?;

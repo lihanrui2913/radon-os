@@ -28,7 +28,8 @@ pub mod async_rt;
 const HEAP_SIZE: usize = 16 * 1024 * 1024;
 
 fn init_heap() -> Result<()> {
-    let vmo = Vmo::create(HEAP_SIZE, VmoOptions::COMMIT)?;
+    let mut vmo = Vmo::create(HEAP_SIZE, VmoOptions::COMMIT)?;
+    vmo.with_nodrop(true);
     let vaddr = map_vmo(&vmo, 0, HEAP_SIZE, MappingFlags::READ | MappingFlags::WRITE)?;
     unsafe { HEAP_ALLOCATOR.lock().init(vaddr, HEAP_SIZE) };
     Ok(())

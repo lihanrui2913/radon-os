@@ -7,10 +7,18 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use libradon::{handle::Handle, memory::Vmo, process::Process};
+use libposix::protocol::{PosixRequest, PosixResponse};
+use libradon::{
+    channel::Channel,
+    handle::OwnedHandle,
+    memory::Vmo,
+    port::{BindOptions, Port, PortPacket},
+    process::Process,
+    signal::Signals,
+};
 use namespace::protocol::NAMESPACE_FILE_TYPE_REGULAR;
-use radon_kernel::{EINVAL, ENOEXEC, Error, Result, layout};
-use spin::{Mutex, RwLock};
+use radon_kernel::{EINVAL, ENOEXEC, ENOSYS, Error, Result, layout};
+use spin::{Lazy, Mutex, RwLock};
 
 use crate::{
     fs::open_inner,
@@ -29,18 +37,27 @@ pub type VirtualAddress = usize;
 pub type PhysicalAddress = usize;
 
 pub struct PosixVmContext {
-    vmar_handle: Handle,
+    vmar_handle: OwnedHandle,
     maps: BTreeMap<VirtualAddress, VmArea>,
 }
+
 pub struct PosixFsContext {}
 pub struct PosixFileContext {}
 pub struct PosixSignalContext {}
 
 pub struct PosixProcess {
     pub pid: usize,
+    pub parent: Option<ArcPosixProcess>,
+    pub ruid: usize,
+    pub euid: usize,
+    pub suid: usize,
+    pub rgid: usize,
+    pub egid: usize,
+    pub sgid: usize,
     pub name: String,
     pub path: String,
     pub process: Process,
+    pub bootstrap: Channel,
     pub vm: PosixVmContext,
     pub fs: PosixFsContext,
     pub file: PosixFileContext,
@@ -50,17 +67,20 @@ pub struct PosixProcess {
 pub type ArcPosixProcess = Arc<RwLock<PosixProcess>>;
 pub type WeakPosixProcess = Weak<RwLock<PosixProcess>>;
 
-pub static PROCESSES: Mutex<Vec<ArcPosixProcess>> = Mutex::new(Vec::new());
-
 pub static NEXT_PID: AtomicUsize = AtomicUsize::new(1);
 
 fn write_to_stack(stack_vmo: &Vmo, stack_top: usize, stack_point: usize, buf: &[u8]) -> Result<()> {
     stack_vmo
-        .write(layout::STACK_TOP - (stack_top - stack_point), buf)
+        .write(stack_point - (stack_top - layout::DEFAULT_STACK_SIZE), buf)
         .map(|_| ())
 }
 
-fn write_usize(stack_vmo: &Vmo, stack_top: usize, stack_point: usize, value: usize) -> Result<()> {
+fn write_usize_to_stack(
+    stack_vmo: &Vmo,
+    stack_top: usize,
+    stack_point: usize,
+    value: usize,
+) -> Result<()> {
     write_to_stack(stack_vmo, stack_top, stack_point, &value.to_ne_bytes())
 }
 
@@ -174,27 +194,27 @@ fn setup_user_stack(
 
     let stack_pointer = sp;
 
-    write_usize(stack_vmo, stack_top, sp, argc)?;
+    write_usize_to_stack(stack_vmo, stack_top, sp, argc)?;
     sp += size_of::<usize>();
 
     for &addr in &argv_addrs {
-        write_usize(stack_vmo, stack_top, sp, addr)?;
+        write_usize_to_stack(stack_vmo, stack_top, sp, addr)?;
         sp += size_of::<usize>();
     }
-    write_usize(stack_vmo, stack_top, sp, 0)?;
+    write_usize_to_stack(stack_vmo, stack_top, sp, 0)?;
     sp += size_of::<usize>();
 
     for &addr in &envp_addrs {
-        write_usize(stack_vmo, stack_top, sp, addr)?;
+        write_usize_to_stack(stack_vmo, stack_top, sp, addr)?;
         sp += size_of::<usize>();
     }
-    write_usize(stack_vmo, stack_top, sp, 0)?;
+    write_usize_to_stack(stack_vmo, stack_top, sp, 0)?;
     sp += size_of::<usize>();
 
     for (aux_type, aux_val) in auxv {
-        write_usize(stack_vmo, stack_top, sp, aux_type)?;
+        write_usize_to_stack(stack_vmo, stack_top, sp, aux_type)?;
         sp += size_of::<usize>();
-        write_usize(stack_vmo, stack_top, sp, aux_val)?;
+        write_usize_to_stack(stack_vmo, stack_top, sp, aux_val)?;
         sp += size_of::<usize>();
     }
 
@@ -202,12 +222,18 @@ fn setup_user_stack(
 }
 
 impl PosixProcess {
-    pub fn new(path: String, argv: &[String], envp: &[String]) -> Result<ArcPosixProcess> {
+    pub fn new(
+        pid: Option<usize>,
+        parent: Option<ArcPosixProcess>,
+        path: String,
+        argv: &[String],
+        envp: &[String],
+    ) -> Result<ArcPosixProcess> {
         let (vmo, file_ty) = open_inner(path.clone())?;
         if file_ty != NAMESPACE_FILE_TYPE_REGULAR {
             return Err(Error::new(EINVAL));
         }
-        let process = Process::create(&path.clone())?.bootstrap(true).build()?;
+        let mut process = Process::create(&path.clone())?.bootstrap(true).build()?;
 
         let size = vmo.size()?;
         let mut buf = vec![0u8; size];
@@ -224,15 +250,29 @@ impl PosixProcess {
             load_result.interp_base,
         )?;
 
-        process.create_thread(&path.clone(), load_result.entry, stack_top, 0)?;
+        let entry = load_result.interp_entry.unwrap_or(load_result.entry);
+        process.create_thread(&path.clone(), entry, stack_top, 0)?;
 
         let vmar_handle = process.get_vmar_handle()?;
-        let pid = NEXT_PID.fetch_add(1, core::sync::atomic::Ordering::SeqCst);
+        let vmar_handle = OwnedHandle::from_raw(vmar_handle.raw());
+        let bootstrap = process.take_bootstrap().ok_or(Error::new(EINVAL))?;
+        let pid = match pid {
+            Some(pid) => pid,
+            None => NEXT_PID.fetch_add(1, core::sync::atomic::Ordering::SeqCst),
+        };
         let this = Arc::new(RwLock::new(Self {
             pid: pid,
+            parent,
+            ruid: 0,
+            euid: 0,
+            suid: 0,
+            rgid: 0,
+            egid: 0,
+            sgid: 0,
             name: path.clone(),
             path: path.clone(),
             process: process,
+            bootstrap,
             vm: PosixVmContext {
                 vmar_handle,
                 maps: BTreeMap::new(),
@@ -241,7 +281,6 @@ impl PosixProcess {
             file: PosixFileContext {},
             signal: PosixSignalContext {},
         }));
-        PROCESSES.lock().push(this.clone());
         Ok(this)
     }
 
@@ -249,3 +288,67 @@ impl PosixProcess {
         self.process.start()
     }
 }
+
+pub struct PosixProcessManager {
+    port: Port,
+    processes: Mutex<Vec<ArcPosixProcess>>,
+}
+
+impl PosixProcessManager {
+    pub fn new() -> Result<Self> {
+        let port = Port::create()?;
+        Ok(Self {
+            port,
+            processes: Mutex::new(Vec::new()),
+        })
+    }
+
+    pub fn create(&self, path: String, argv: &[String], envp: &[String]) -> Result<()> {
+        let process = PosixProcess::new(None, None, path, argv, envp)?;
+        self.processes.lock().push(process.clone());
+        let p = process.read();
+        self.port.bind(
+            p.pid as u64,
+            &p.bootstrap,
+            Signals::READABLE | Signals::PEER_CLOSED,
+            BindOptions::Persistent,
+        )?;
+        Ok(())
+    }
+
+    pub fn run(&self) -> Result<()> {
+        let mut packets = [PortPacket::zeroed(); 32];
+
+        loop {
+            let count = self.port.wait_blocking(&mut packets)?;
+
+            for i in 0..count {
+                let packet = packets[i];
+
+                if let Some(process) = self
+                    .processes
+                    .lock()
+                    .iter()
+                    .find(|p| p.read().pid == packet.key as usize)
+                {
+                    let response = self.handle_posix_process_events(process)?;
+                    process.read().bootstrap.send(response.to_bytes())?;
+                }
+            }
+        }
+    }
+
+    fn handle_posix_process_events(&self, process: &ArcPosixProcess) -> Result<PosixResponse> {
+        let mut request = PosixRequest::default();
+        process.read().bootstrap.recv(request.to_bytes_mut())?;
+        let result = match request.idx {
+            _ => Err(Error::new(ENOSYS)),
+        };
+        Ok(PosixResponse {
+            ret: Error::mux(result),
+        })
+    }
+}
+
+pub static PROCESS_MANAGER: Lazy<PosixProcessManager> =
+    Lazy::new(|| PosixProcessManager::new().unwrap());
