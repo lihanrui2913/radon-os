@@ -105,11 +105,8 @@ fn start_core_services(bootstrap: &BootstrapHandler) -> Result<(), InitError> {
     Ok(())
 }
 
-static POSIX_ELF: &'static [u8] = include_bytes!("../../posix/build/posix.elf");
-
 /// 启动用户服务
-fn start_user_services(bootstrap: &BootstrapHandler) -> Result<(), InitError> {
-    start_service(bootstrap, "posix", POSIX_ELF, false)?;
+fn start_user_services(_bootstrap: &BootstrapHandler) -> Result<(), InitError> {
     Ok(())
 }
 

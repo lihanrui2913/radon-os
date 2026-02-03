@@ -3,7 +3,8 @@
 
 use core::panic::PanicInfo;
 
-use radon_kernel::{Result, memory::heap::HEAP_ALLOCATOR};
+use linked_list_allocator::LockedHeap;
+use radon_kernel::Result;
 
 use crate::memory::{MappingFlags, Vmo, VmoOptions, map_vmo};
 
@@ -26,6 +27,9 @@ pub mod syscall;
 pub mod async_rt;
 
 const HEAP_SIZE: usize = 16 * 1024 * 1024;
+
+#[global_allocator]
+pub static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 fn init_heap() -> Result<()> {
     let mut vmo = Vmo::create(HEAP_SIZE, VmoOptions::COMMIT)?;

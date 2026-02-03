@@ -1,10 +1,10 @@
 use core::{hint::spin_loop, panic::PanicInfo, ptr::addr_of_mut};
 
+use crate::object::process::current_process;
 use alloc::{boxed::Box, format};
 use limine::request::ExecutableFileRequest;
 use log::debug;
 use object::{File, Object, ObjectSymbol};
-use radon_kernel::object::process::current_process;
 use rustc_demangle::demangle;
 use spin::Lazy;
 use unwinding::{

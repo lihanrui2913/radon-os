@@ -8,6 +8,7 @@ use crate::{
 
 pub mod clock;
 pub mod error;
+pub mod futex;
 pub mod kernel;
 pub mod log;
 pub mod memory;
@@ -69,6 +70,9 @@ pub extern "C" fn syscall_handler(regs: *mut Ptrace) {
         SYS_PROCESS_GET_INIT_HANDLE => process::sys_process_get_init_handle(arg1),
         SYS_PROCESS_WAIT => process::sys_process_wait(arg1, arg2, arg3),
         SYS_PROCESS_GET_VMAR_HANDLE => process::sys_process_get_vmar_handle(arg1),
+
+        SYS_FUTEX_WAIT => futex::sys_futex_wait(arg1, arg2, arg3),
+        SYS_FUTEX_WAKE => futex::sys_futex_wake(arg1, arg2),
 
         SYS_VMO_CREATE => memory::sys_vmo_create(arg1, arg2),
         SYS_VMO_CREATE_PHYSICAL => memory::sys_vmo_create_physical(arg1, arg2, arg3),

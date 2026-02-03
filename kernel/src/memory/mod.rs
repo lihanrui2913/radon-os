@@ -26,5 +26,3 @@ impl FrameAllocator for DummyFrameAllocator {
         FrameUsage::new(FrameCount::new(0), FrameCount::new(0))
     }
 }
-
-pub mod heap;

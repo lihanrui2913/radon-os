@@ -38,6 +38,7 @@ use namespace::{
     },
 };
 use radon_kernel::{EINVAL, Error};
+use spin::RwLock;
 
 extern crate alloc;
 
@@ -92,10 +93,12 @@ impl Device for Partition {
 
 pub struct RootNSRequestHandler {
     inner: Ext2Fs<Partition>,
+    next_ids: RwLock<BTreeMap<u64, usize>>,
+    files: RwLock<BTreeMap<u64, BTreeMap<usize, Ext2TypeWithFile<Partition>>>>,
 }
 
 impl RequestHandler for RootNSRequestHandler {
-    fn handle(&self, request: &Request, _ctx: &RequestContext) -> Response {
+    fn handle(&self, request: &Request, ctx: &RequestContext) -> Response {
         let op = DriverOp::from(request.header.op);
         match op {
             DriverOp::Open => {
@@ -119,7 +122,7 @@ impl RequestHandler for RootNSRequestHandler {
                 };
                 let file = match self.inner.get_file(
                     &path,
-                    self.inner.root().expect("File system is broken"),
+                    self.inner.root().expect("Root file system is broken"),
                     true,
                 ) {
                     Ok(f) => f,
@@ -130,7 +133,49 @@ impl RequestHandler for RootNSRequestHandler {
                         );
                     }
                 };
-                let (handle, file_ty) = match file {
+                let mut next_ids = self.next_ids.write();
+                let next_id = next_ids
+                    .get_mut(&ctx.conn_id)
+                    .expect("Invalid connection id");
+                let mut file_tables = self.files.write();
+                let file_table = file_tables
+                    .get_mut(&ctx.conn_id)
+                    .expect("Invalid connection id");
+                let id = {
+                    let r = *next_id;
+                    *next_id += 1;
+                    r
+                };
+                file_table.insert(id, file.clone());
+                let file_type = match file {
+                    Ext2TypeWithFile::Regular(_) => NAMESPACE_FILE_TYPE_REGULAR,
+                    Ext2TypeWithFile::Directory(_) => NAMESPACE_FILE_TYPE_DIRECTORY,
+                    Ext2TypeWithFile::SymbolicLink(_) => NAMESPACE_FILE_TYPE_SYMLINK,
+                    _ => NAMESPACE_FILE_TYPE_UNKNOWN,
+                };
+                let mut data = Vec::new();
+                data.extend_from_slice(&file_type.to_le_bytes());
+                data.extend_from_slice(&id.to_le_bytes());
+                Response::success(request.header.request_id).with_data(data)
+            }
+            DriverOp::Read => {
+                let id = usize::from_le(unsafe {
+                    (request.data.as_ptr() as *const usize).read_unaligned()
+                });
+                let mut file_tables = self.files.write();
+                let file_table = file_tables
+                    .get_mut(&ctx.conn_id)
+                    .expect("Invalid connection id");
+                let file = match file_table.get(&id) {
+                    Some(f) => f,
+                    None => {
+                        return Response::error(
+                            request.header.request_id,
+                            NAMESPACE_INVALID_ARGUMENT,
+                        );
+                    }
+                };
+                let (handle, file_ty) = match file.clone() {
                     Ext2TypeWithFile::Regular(mut regular) => {
                         if regular.size().0 == 0 {
                             let mut vmo = match Vmo::create(
@@ -265,11 +310,16 @@ impl RequestHandler for RootNSRequestHandler {
         }
     }
 
-    fn on_connect(&self, _ctx: &ConnectionContext) -> libdriver::Result<()> {
+    fn on_connect(&self, ctx: &ConnectionContext) -> libdriver::Result<()> {
+        self.next_ids.write().insert(ctx.conn_id, 1);
+        self.files.write().insert(ctx.conn_id, BTreeMap::new());
         Ok(())
     }
 
-    fn on_disconnect(&self, _ctx: &ConnectionContext) {}
+    fn on_disconnect(&self, ctx: &ConnectionContext) {
+        let _ = self.next_ids.write().remove(&ctx.conn_id);
+        let _ = self.files.write().remove(&ctx.conn_id);
+    }
 }
 
 const MAX_PARTITION_NUM: usize = 32;
@@ -302,7 +352,11 @@ fn rootns_main() -> radon_kernel::Result<()> {
                         )?;
 
                         let rootns_service = ServiceBuilder::new(ROOTNS_DRIVER_SERVICE_NAME)
-                            .build(RootNSRequestHandler { inner: fs })
+                            .build(RootNSRequestHandler {
+                                inner: fs,
+                                next_ids: RwLock::new(BTreeMap::new()),
+                                files: RwLock::new(BTreeMap::new()),
+                            })
                             .map_err(|_| Error::new(EINVAL))?;
                         rootns_service.run().map_err(|_| Error::new(EINVAL))?;
 
